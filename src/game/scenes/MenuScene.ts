@@ -85,6 +85,16 @@ export class MenuScene extends Phaser.Scene {
     });
     copyright.setOrigin(0.5);
 
+    // Leaderboard button
+    const lbText = this.add.text(width / 2, height / 2 + 140, 'LEADERBOARD (L)', {
+      fontFamily: 'VT323',
+      fontSize: '20px',
+      color: '#fbbf24'
+    });
+    lbText.setOrigin(0.5);
+    lbText.setInteractive({ useHandCursor: true });
+    lbText.on('pointerdown', () => this.scene.start('LeaderboardScene'));
+
     // Keyboard input
     this.input.keyboard?.on('keydown-SPACE', () => {
       this.startGame();
@@ -92,6 +102,10 @@ export class MenuScene extends Phaser.Scene {
 
     this.input.keyboard?.on('keydown-ENTER', () => {
       this.startGame();
+    });
+
+    this.input.keyboard?.on('keydown-L', () => {
+      this.scene.start('LeaderboardScene');
     });
   }
 

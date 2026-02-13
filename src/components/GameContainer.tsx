@@ -6,6 +6,8 @@ import { PangScene } from '@/game/scenes/PangScene';
 import { MainLevel } from '@/game/scenes/MainLevel';
 import { NeoBelgradeScene } from '@/game/scenes/NeoBelgradeScene';
 import { PartisanTunnelsScene } from '@/game/scenes/PartisanTunnelsScene';
+import { LeaderboardScene } from '@/game/scenes/LeaderboardScene';
+import { eventBus, GameEvents } from '@/game/EventBus';
 import SettingsMenu from './SettingsMenu';
 import { Settings } from 'lucide-react';
 
@@ -43,7 +45,7 @@ const GameContainer: React.FC<GameContainerProps> = ({ crtEnabled, onCrtToggle }
         mode: Phaser.Scale.FIT,
         autoCenter: Phaser.Scale.CENTER_BOTH
       },
-      scene: [BootScene, MenuScene, PangScene, MainLevel, NeoBelgradeScene, PartisanTunnelsScene]
+      scene: [BootScene, MenuScene, PangScene, MainLevel, NeoBelgradeScene, PartisanTunnelsScene, LeaderboardScene]
     };
 
     gameRef.current = new Phaser.Game(config);

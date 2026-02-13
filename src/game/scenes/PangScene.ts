@@ -4,6 +4,7 @@ import { Enemy, BanknoteType } from '../entities/Enemy';
 import { EnemyManager } from '../entities/EnemyManager';
 import { GoreManager } from '../systems/GoreManager';
 import { scoreService } from '../services/ScoreService';
+import { eventBus, GameEvents } from '../EventBus';
 
 export class PangScene extends Phaser.Scene {
   private player!: Player;
@@ -130,10 +131,17 @@ export class PangScene extends Phaser.Scene {
   }
 
   private updateHUD(): void {
-    this.scoreText.setText(`SCORE: ${scoreService.formatScore(scoreService.getCurrentScore())}`);
-    
+    const score = scoreService.getCurrentScore();
     const health = this.player.getHealth();
+
+    this.scoreText.setText(`SCORE: ${scoreService.formatScore(score)}`);
     this.healthText.setText('❤'.repeat(health) + '♡'.repeat(3 - health));
+
+    // Emit to React HUD via EventBus
+    eventBus.emit(GameEvents.SCORE_UPDATE, score);
+    eventBus.emit(GameEvents.HEALTH_UPDATE, health, this.player.getMaxHealth());
+    eventBus.emit(GameEvents.LEVEL_UPDATE, this.level);
+    eventBus.emit(GameEvents.WAVE_UPDATE, this.waveNumber);
   }
 
   private shoot(): void {
@@ -177,6 +185,9 @@ export class PangScene extends Phaser.Scene {
     // Update player
     this.player.update(this.cursors);
 
+    // Belt depth-sort: Z = position.y for player
+    this.player.setDepth(this.player.y);
+
     // Update parallax (based on player position)
     const playerVelX = (this.player.body as Phaser.Physics.Arcade.Body).velocity.x;
     if (this.parallaxLayers[0]) this.parallaxLayers[0].tilePositionX += playerVelX * 0.001;
@@ -205,8 +216,10 @@ export class PangScene extends Phaser.Scene {
         continue;
       }
 
-      // Check collision with enemies
+      // Check collision with enemies (AABB collision)
       for (const enemy of this.enemyManager.getEnemies()) {
+        // Belt depth-sort: Z = position.y for enemies
+        enemy.setDepth(enemy.y);
         if (Phaser.Geom.Intersects.RectangleToRectangle(
           beam.getBounds(),
           enemy.getBounds()
@@ -294,6 +307,7 @@ export class PangScene extends Phaser.Scene {
     const { width, height } = this.cameras.main;
 
     this.physics.pause();
+    eventBus.emit(GameEvents.GAME_OVER, scoreService.getCurrentScore());
 
     const overlay = this.add.rectangle(width / 2, height / 2, width, height, 0x000000, 0.8);
     overlay.setDepth(998);
