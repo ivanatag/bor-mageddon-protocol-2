@@ -1,9 +1,9 @@
 import Phaser from 'phaser';
 
 /**
- * DroneSmederevac - Flying ranged enemy drone from Smederevo.
- * Hovers above the battlefield and fires projectiles downward.
- * Uses belt depth-sorting (Z = position.y).
+ * DroneSmederevac - Level 3 floating stove-shaped turret.
+ * Fires "Energy Rakija" projectiles (RakijaProjectile).
+ * Uses Classic Gore and belt depth-sorting (Z = position.y).
  */
 export class DroneSmederevac extends Phaser.GameObjects.Container {
   private sprite: Phaser.GameObjects.Rectangle;
