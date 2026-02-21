@@ -1,4 +1,8 @@
 import Phaser from 'phaser';
+import { Weapon } from './Weapon';
+import { eventBus } from '../EventBus';
+
+export type PlayerState = 'NORMAL' | 'EQUIPPED';
 
 export class Player extends Phaser.GameObjects.Container {
   private sprite: Phaser.GameObjects.Rectangle;
@@ -9,6 +13,11 @@ export class Player extends Phaser.GameObjects.Container {
   private maxHealth: number = 3;
   private isInvulnerable: boolean = false;
   private invulnerabilityTime: number = 2000;
+
+  // Weapon system
+  private weaponState: PlayerState = 'NORMAL';
+  private equippedWeapon: Weapon | null = null;
+  private facingRight: boolean = true;
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
     super(scene, x, y);
@@ -36,11 +45,13 @@ export class Player extends Phaser.GameObjects.Container {
   update(cursors: Phaser.Types.Input.Keyboard.CursorKeys): void {
     const body = this.body as Phaser.Physics.Arcade.Body;
 
-    // Horizontal movement
+    // Horizontal movement + facing direction
     if (cursors.left?.isDown) {
       body.setVelocityX(-this.speed);
+      this.facingRight = false;
     } else if (cursors.right?.isDown) {
       body.setVelocityX(this.speed);
+      this.facingRight = true;
     } else {
       body.setVelocityX(0);
     }
@@ -53,12 +64,25 @@ export class Player extends Phaser.GameObjects.Container {
     }
   }
 
+  /**
+   * Attack action — delegates to weapon fire or basic punch based on state.
+   * Returns a beam Rectangle for NORMAL state (backward compat), or null for EQUIPPED.
+   */
   shoot(): Phaser.GameObjects.Rectangle | null {
-    if (!this.canShoot) return null;
+    if (this.weaponState === 'EQUIPPED' && this.equippedWeapon) {
+      const fired = this.equippedWeapon.fire(this.x, this.y, this.facingRight);
 
+      if (!fired && this.equippedWeapon.isEmpty()) {
+        // Empty weapon → throw it and revert to NORMAL
+        this.throwWeapon();
+      }
+      return null;
+    }
+
+    // NORMAL state — original beam/punch logic
+    if (!this.canShoot) return null;
     this.canShoot = false;
 
-    // Create vertical beam
     const beam = this.scene.add.rectangle(
       this.x,
       this.y - 30,
@@ -73,7 +97,6 @@ export class Player extends Phaser.GameObjects.Container {
     beamBody.setVelocityY(-600);
     beamBody.setSize(8, 20);
 
-    // Reset cooldown
     this.scene.time.delayedCall(this.shootCooldown, () => {
       this.canShoot = true;
     });
@@ -81,19 +104,65 @@ export class Player extends Phaser.GameObjects.Container {
     return beam;
   }
 
+  // ── Weapon API ──
+
+  equipWeapon(weapon: Weapon): void {
+    this.equippedWeapon?.destroy();
+    this.equippedWeapon = weapon;
+    this.weaponState = 'EQUIPPED';
+    eventBus.emit('weapon:equipped', weapon.getName(), weapon.getAmmo(), weapon.getMaxAmmo());
+  }
+
+  private throwWeapon(): void {
+    if (!this.equippedWeapon) return;
+
+    // Visual "throw" — a small rectangle flung forward
+    const dirMult = this.facingRight ? 1 : -1;
+    const thrown = this.scene.add.rectangle(this.x + 20 * dirMult, this.y - 10, 16, 8, 0x888888);
+    thrown.setStrokeStyle(1, 0x444444);
+    this.scene.physics.add.existing(thrown);
+    const thrownBody = thrown.body as Phaser.Physics.Arcade.Body;
+    thrownBody.setVelocity(400 * dirMult, -150);
+
+    this.scene.tweens.add({
+      targets: thrown,
+      angle: 720 * dirMult,
+      alpha: 0,
+      duration: 600,
+      onComplete: () => thrown.destroy(),
+    });
+
+    eventBus.emit('weapon:thrown');
+    this.equippedWeapon.destroy();
+    this.equippedWeapon = null;
+    this.weaponState = 'NORMAL';
+  }
+
+  getWeaponState(): PlayerState {
+    return this.weaponState;
+  }
+
+  getEquippedWeapon(): Weapon | null {
+    return this.equippedWeapon;
+  }
+
+  isFacingRight(): boolean {
+    return this.facingRight;
+  }
+
+  // ── Health (unchanged) ──
+
   takeDamage(): boolean {
     if (this.isInvulnerable) return false;
 
     this.health--;
     this.isInvulnerable = true;
 
-    // Flash red
     this.sprite.fillColor = 0xff0000;
     this.scene.time.delayedCall(100, () => {
       this.sprite.fillColor = 0xcc0000;
     });
 
-    // End invulnerability
     this.scene.time.delayedCall(this.invulnerabilityTime, () => {
       this.isInvulnerable = false;
     });
