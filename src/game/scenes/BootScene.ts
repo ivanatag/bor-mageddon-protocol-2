@@ -42,6 +42,30 @@ export class BootScene extends Phaser.Scene {
       percentText.destroy();
     });
 
+    // ── Audio: Weapons ──
+    this.load.audio('gun_shot_m70', 'assets/audio/sfx/gun-shot-m70.wav');
+    this.load.audio('gun_fire_laser', 'assets/audio/sfx/gun-fire-laser.wav');
+
+    // ── Audio: Dizelcic Aerosol (random pick) ──
+    this.load.audio('dizelcic_aerosol_1', 'assets/audio/sfx/Dizelcic-Aerosol_1.mp3');
+    this.load.audio('dizelcic_aerosol_2', 'assets/audio/sfx/Dizelcic-Aerosol_2.mp3');
+
+    // ── Audio: Object destruction (random pick) ──
+    this.load.audio('break_1', 'assets/audio/sfx/Break_1.mp3');
+    this.load.audio('break_2', 'assets/audio/sfx/Break_2.mp3');
+    this.load.audio('break_3', 'assets/audio/sfx/Break_3.mp3');
+
+    // ── Images: Laser effects ──
+    this.load.image('effect_laser_1', 'assets/fx/effect-laser-1.png');
+    this.load.image('effect_laser_2', 'assets/fx/effect-laser-2.png');
+    this.load.image('effect_laser_3', 'assets/fx/effect-laser-3.png');
+
+    // ── Spritesheet: M70 muzzle flash ──
+    this.load.spritesheet('muzzle_flash_m70', 'assets/fx/muzzle-flash-m70.png', {
+      frameWidth: 64,
+      frameHeight: 64,
+    });
+
     this.createPlaceholderAssets();
   }
 
