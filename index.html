@@ -6,10 +6,18 @@
     <title>BOR-MAGEDDON 1993 | TERMINAL 01</title>
 </head>
 <body>
+    <div id="start-overlay">
+        <div class="start-box">
+            <h1>BOR-MAGEDDON [TERMINAL_01]</h1>
+            <button id="initialize-btn">INITIALIZE PROTOCOL</button>
+            <p>ESTABLISHING SECURE CONNECTION...</p>
+        </div>
+    </div>
+
     <div class="crt-overlay"></div>
     <div class="scanlines"></div>
 
-    <div id="boot-screen">
+    <div id="boot-screen" style="display:none;">
         <div id="boot-text"></div>
     </div>
 
@@ -17,13 +25,13 @@
 
     <div id="expanded-card">
         <div class="card-content">
-            <button class="close-btn" title="Close Archive">X</button>
+            <button class="close-btn">X</button>
             <div class="card-header">
                 <span class="system-tag">DE-ENCRYPTION SUCCESSFUL</span>
                 <h2 class="card-title">NAME</h2>
             </div>
             <p class="card-desc">DESCRIPTION</p>
-            <div class="stats-row" style="display:flex; gap:20px; font-weight:bold; color: #fff; margin-bottom: 20px;">
+            <div class="stats-row" style="display:flex; gap:20px; font-weight:bold; color: #fff;">
                 <div class="stat">SPD: <span id="stat-spd">--</span></div>
                 <div class="stat">PWR: <span id="stat-pwr">--</span></div>
             </div>
