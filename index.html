@@ -3,39 +3,35 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="X-UA-Compatible" content="ie=edge">
     <title>BOR-MAGEDDON 1993 | TERMINAL 01</title>
-    
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-
     <div class="crt-overlay"></div>
     <div class="scanlines"></div>
+
+    <div id="boot-screen">
+        <div id="boot-text"></div>
+    </div>
 
     <div id="hint">[DRAG TO ROTATE] - [CLICK CARD TO ACCESS ARCHIVE]</div>
 
     <div id="expanded-card">
         <div class="card-content">
-            <button class="close-btn" title="Close Archive">X</button>
-            
+            <button class="close-btn">X</button>
             <div class="card-header">
                 <span class="system-tag">DE-ENCRYPTION SUCCESSFUL</span>
                 <h2 class="card-title">NAME</h2>
             </div>
-            
             <p class="card-desc">DESCRIPTION</p>
-            
-            <div class="stats-row" style="display:flex; gap:20px; font-weight:bold;">
+            <div class="stats-row">
                 <div class="stat">SPD: <span id="stat-spd">--</span></div>
                 <div class="stat">PWR: <span id="stat-pwr">--</span></div>
             </div>
-            
             <button class="select-btn">INITIATE DEPLOYMENT</button>
         </div>
     </div>
 
     <script type="module" src="main.js"></script>
-
 </body>
 </html>
