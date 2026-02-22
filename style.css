@@ -1,1 +1,61 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap');
 
+body, html {
+  margin: 0; padding: 0;
+  width: 100%; height: 100%;
+  overflow: hidden;
+  background: #0f0b0a;
+  font-family: 'Space Mono', monospace;
+}
+
+canvas { display: block; }
+
+/* Higher z-index to stay above the 3D world */
+#expanded-card {
+  position: fixed;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  background: rgba(0, 0, 0, 0.9);
+  display: none; /* JS will change this to flex */
+  justify-content: center;
+  align-items: center;
+  z-index: 999; 
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+#expanded-card.active {
+  opacity: 1;
+}
+
+.card-content {
+  width: 380px;
+  padding: 40px;
+  background: #1a0a05;
+  border: 4px solid #ff3333;
+  position: relative;
+  color: #ff3333;
+  box-shadow: 0 0 30px rgba(255, 51, 51, 0.3);
+}
+
+.card-title { font-size: 48px; color: #fff; margin: 5px 0; }
+.card-desc { color: #ccc; font-size: 14px; line-height: 1.5; }
+
+.close-btn {
+  position: absolute; top: 15px; right: 15px;
+  background: none; border: 1px solid #ff3333; color: #ff3333;
+  cursor: pointer;
+}
+
+.select-btn {
+  width: 100%; padding: 15px; margin-top: 20px;
+  background: #ff3333; border: none; color: #000;
+  font-weight: bold; cursor: pointer;
+}
+
+.select-btn:hover { background: #fff; }
+
+.scanlines, .crt-overlay {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  pointer-events: none; z-index: 1000;
+}
