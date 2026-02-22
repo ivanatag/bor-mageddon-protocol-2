@@ -20,11 +20,22 @@ import * as THREE from 'https://cdn.skypack.dev/three@0.128.0';
   renderer.setSize(window.innerWidth, window.innerHeight);
   document.body.prepend(renderer.domElement);
 
-  // --- AUDIO SYSTEM ---
   const listener = new THREE.AudioListener();
   camera.add(listener);
   const soundtrack = new THREE.Audio(listener);
   const audioLoader = new THREE.AudioLoader();
+
+  // --- PARTICLE SYSTEM ---
+  const ashCount = 1000;
+  const ashGeo = new THREE.BufferGeometry();
+  const ashPos = new Float32Array(ashCount * 3);
+  for(let i=0; i < ashCount * 3; i++) {
+    ashPos[i] = (Math.random() - 0.5) * 30; // Random X, Y, Z spreads
+  }
+  ashGeo.setAttribute('position', new THREE.BufferAttribute(ashPos, 3));
+  const ashMaterial = new THREE.PointsMaterial({ size: 0.08, color: theme.particle, transparent: true, opacity: 0.4 });
+  const ashSystem = new THREE.Points(ashGeo, ashMaterial);
+  scene.add(ashSystem);
 
   // --- TEXTURE BUILDERS ---
   function createTitleTexture() {
@@ -52,38 +63,26 @@ import * as THREE from 'https://cdn.skypack.dev/three@0.128.0';
 
   // --- FLOW CONTROL ---
   let inputLocked = true;
-
   const initializeTerminal = () => {
     document.getElementById('start-overlay').style.display = 'none';
     document.getElementById('boot-screen').style.display = 'block';
-
     const audioCtx = THREE.AudioContext.getContext();
     if (audioCtx.state === 'suspended') audioCtx.resume();
-
     audioLoader.load(BGM_URL, (buffer) => {
         soundtrack.setBuffer(buffer);
         soundtrack.setLoop(true);
         soundtrack.setVolume(0.5);
         soundtrack.play();
     });
-
     runBoot();
   };
 
   document.getElementById('initialize-btn').onclick = initializeTerminal;
 
-  // Music Toggle Logic
   const musicBtn = document.getElementById('music-toggle');
   musicBtn.onclick = () => {
-    if (soundtrack.isPlaying) {
-        soundtrack.pause();
-        musicBtn.textContent = 'AUDIO: [OFF]';
-        musicBtn.style.borderColor = '#660000';
-    } else {
-        soundtrack.play();
-        musicBtn.textContent = 'AUDIO: [ON]';
-        musicBtn.style.borderColor = '#ff3333';
-    }
+    if (soundtrack.isPlaying) { soundtrack.pause(); musicBtn.textContent = 'AUDIO: [OFF]'; } 
+    else { soundtrack.play(); musicBtn.textContent = 'AUDIO: [ON]'; }
   };
 
   function runBoot() {
@@ -103,7 +102,7 @@ import * as THREE from 'https://cdn.skypack.dev/three@0.128.0';
     }, 300);
   }
 
-  // --- ASSETS ---
+  // --- MESHES ---
   const titleMesh = new THREE.Mesh(new THREE.PlaneGeometry(26, 7), new THREE.MeshBasicMaterial({ map: createTitleTexture(), transparent: true, opacity: 0.3, fog: false, depthWrite: false }));
   titleMesh.position.set(0, 0, -6); scene.add(titleMesh);
 
@@ -123,18 +122,15 @@ import * as THREE from 'https://cdn.skypack.dev/three@0.128.0';
   spotLight.position.set(0, 5, 8);
   scene.add(spotLight);
 
-  // --- INTERACTION ---
+  // --- ANIMATION ---
   let currentAngle = 0, targetAngle = 0, isDragging = false, lastX = 0, totalMove = 0;
   const raycaster = new THREE.Raycaster(); const mouse = new THREE.Vector2();
 
   window.addEventListener('mousedown', e => { if (inputLocked) return; isDragging = true; lastX = e.clientX; totalMove = 0; });
   window.addEventListener('mousemove', e => {
     if (inputLocked || !isDragging) return;
-    targetAngle += (e.clientX - lastX) * 0.01; 
-    totalMove += Math.abs(e.clientX - lastX); 
-    lastX = e.clientX;
-    mouse.x = (e.clientX / window.innerWidth) * 2 - 1; 
-    mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+    targetAngle += (e.clientX - lastX) * 0.01; totalMove += Math.abs(e.clientX - lastX); lastX = e.clientX;
+    mouse.x = (e.clientX / window.innerWidth) * 2 - 1; mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
     raycaster.setFromCamera(mouse, camera); document.body.style.cursor = raycaster.intersectObjects(cardMeshes).length > 0 ? 'pointer' : 'default';
   });
   window.addEventListener('mouseup', e => {
@@ -155,8 +151,8 @@ import * as THREE from 'https://cdn.skypack.dev/three@0.128.0';
 
   document.addEventListener('click', (e) => {
     if (e.target.classList.contains('close-btn') || e.target.id === 'expanded-card') {
-      const el = document.getElementById('expanded-card'); 
-      if (el) { el.classList.remove('active'); setTimeout(() => { el.style.display = 'none'; }, 300); }
+      const el = document.getElementById('expanded-card'); el.classList.remove('active');
+      setTimeout(() => { el.style.display = 'none'; }, 300);
     }
   });
 
@@ -164,10 +160,20 @@ import * as THREE from 'https://cdn.skypack.dev/three@0.128.0';
     requestAnimationFrame(animate);
     if(!isDragging) targetAngle += 0.002;
     currentAngle += (targetAngle - currentAngle) * 0.1;
+    
     cardMeshes.forEach((m, i) => {
       const theta = currentAngle + (i * ANGLE_STEP);
       m.position.x = Math.sin(theta) * RADIUS; m.position.z = Math.cos(theta) * RADIUS - RADIUS; m.rotation.y = theta;
     });
+
+    // RISING PARTICLES LOGIC
+    const pos = ashSystem.geometry.attributes.position.array;
+    for(let i = 1; i < pos.length; i += 3) {
+      pos[i] += 0.015; // Move Y up
+      if (pos[i] > 10) pos[i] = -10; // Loop back to bottom
+    }
+    ashSystem.geometry.attributes.position.needsUpdate = true;
+
     titleMesh.material.opacity = 0.2 + Math.abs(Math.sin(time * 0.001)) * 0.15;
     renderer.render(scene, camera);
   }
