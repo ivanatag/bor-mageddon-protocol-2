@@ -1,5 +1,5 @@
 /* 1. IMPORTS & CORE SETUP */
-@import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Metal+Mania&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Metal+Mania&family=Space+Mono:wght@400;700&display=swap');
 
 body, html {
     margin: 0; padding: 0;
@@ -8,6 +8,14 @@ body, html {
     background: #050404; /* Darker base for better fog contrast */
     font-family: 'Space Mono', monospace;
     color: #ff3333;
+}
+
+/* Force browser to load Metal Mania immediately */
+body::after {
+    content: "BORMAGEDDON";
+    font-family: "Metal Mania";
+    visibility: hidden;
+    position: absolute;
 }
 
 canvas { 
@@ -93,7 +101,7 @@ canvas {
 }
 
 .card-title { 
-    font-family: 'Metal Mania', cursive; /* Metal Mania for the character names */
+    font-family: 'Metal Mania', cursive; 
     font-size: 52px; 
     color: #fff; 
     margin: 5px 0; 
