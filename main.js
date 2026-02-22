@@ -48,31 +48,38 @@ import * as THREE from 'https://cdn.skypack.dev/three@0.128.0';
   spotLight.position.set(0, 5, 8);
   scene.add(spotLight);
 
-  // 3. THE TITLE (STAYING VISIBLE)
+  // 3. TITLE SYSTEM: METAL MANIA & DEPTH FIX
   function createTitleTexture() {
     const c = document.createElement('canvas');
     c.width = 1024; c.height = 256;
     const ctx = c.getContext('2d');
     ctx.textAlign = 'center';
-    ctx.font = '900 130px "Space Mono", monospace';
-    ctx.fillStyle = '#220800'; ctx.fillText('BORMAGEDDON', 512+10, 128+10);
+    
+    // Switch font to Metal Mania
+    ctx.font = '900 140px "Metal Mania", cursive';
+    
+    // Shadow
+    ctx.fillStyle = '#110400'; ctx.fillText('BORMAGEDDON', 512+12, 128+12);
+    // Main Rust Color
     ctx.fillStyle = '#ff4400'; ctx.fillText('BORMAGEDDON', 512, 128);
-    return new THREE.CanvasTexture(c);
+    
+    const tex = new THREE.CanvasTexture(c);
+    return tex;
   }
 
   const titleMesh = new THREE.Mesh(
-    new THREE.PlaneGeometry(24, 7),
+    new THREE.PlaneGeometry(26, 8),
     new THREE.MeshBasicMaterial({ 
         map: createTitleTexture(), 
         transparent: true, 
-        opacity: 0.25, // Increased opacity
-        fog: false     // CRITICAL: This allows it to show through the rust
+        opacity: 0.3,
+        fog: false,
+        depthWrite: false // CRITICAL: Fixes the weird box overlay in the center
     })
   );
-  titleMesh.position.set(0, 1.5, -6); // Pulled slightly closer
+  // Lowered and centered
+  titleMesh.position.set(0, 0, -6); 
   scene.add(titleMesh);
-
-  
 
   // 4. ASH SYSTEM
   const ashCount = 1000;
@@ -145,7 +152,7 @@ import * as THREE from 'https://cdn.skypack.dev/three@0.128.0';
     img.src = RAW_URL + card.file + "?t=" + Date.now();
   });
 
-  // 6. INTERACTION & CLOSING LOGIC
+  // 6. INTERACTION & CLOSING
   let currentAngle = 0, targetAngle = 0, isDragging = false, lastX = 0, totalMove = 0;
   const raycaster = new THREE.Raycaster();
   const mouse = new THREE.Vector2();
@@ -158,13 +165,15 @@ import * as THREE from 'https://cdn.skypack.dev/three@0.128.0';
     }
   };
 
-  // Close when clicking the "X"
-  document.querySelector('.close-btn').onclick = closeArchive;
+  const closeBtn = document.querySelector('.close-btn');
+  if(closeBtn) closeBtn.onclick = closeArchive;
 
-  // NEW: Close when clicking the background overlay
-  document.getElementById('expanded-card').onclick = (e) => {
-    if (e.target.id === 'expanded-card') closeArchive();
-  };
+  const overlay = document.getElementById('expanded-card');
+  if(overlay) {
+    overlay.addEventListener('click', (e) => {
+      if (e.target.id === 'expanded-card') closeArchive();
+    });
+  }
 
   window.addEventListener('mousedown', e => { isDragging = true; lastX = e.clientX; totalMove = 0; });
   window.addEventListener('mousemove', e => {
@@ -212,10 +221,15 @@ import * as THREE from 'https://cdn.skypack.dev/three@0.128.0';
     }
     ashSystem.geometry.attributes.position.needsUpdate = true;
 
-    // Title Pulse
-    titleMesh.material.opacity = 0.15 + Math.abs(Math.sin(time * 0.001)) * 0.1;
+    titleMesh.material.opacity = 0.2 + Math.abs(Math.sin(time * 0.001)) * 0.15;
 
     renderer.render(scene, camera);
   }
   animate();
+
+  window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
 })();
