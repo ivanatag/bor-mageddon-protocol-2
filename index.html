@@ -1,32 +1,41 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>Bor-Mageddon Protocol-2 | SFRY Arcade</title>
-    <meta name="description" content="Bor-Mageddon Protocol-2 - A 16-bit retro arcade game featuring hyperinflation stabilization mechanics. Shoot banknote bubbles as Marko in this Yugoslav-themed Pang-style game." />
-    <meta name="author" content="SFRY Arcade" />
-    <meta name="keywords" content="retro game, arcade, phaser, pang, Yugoslavia, hyperinflation, 16-bit" />
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>BOR-MAGEDDON 1993 | TERMINAL 01</title>
+    
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
 
-    <meta property="og:title" content="Bor-Mageddon Protocol-2" />
-    <meta property="og:description" content="Hyperinflation Stabilization - A retro arcade experience set in 1993 Yugoslavia" />
-    <meta property="og:type" content="website" />
-    <meta property="og:image" content="https://lovable.dev/opengraph-image-p98pqg.png" />
+    <div class="crt-overlay"></div>
+    <div class="scanlines"></div>
 
-    <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:site" content="@Lovable" />
-    <meta name="twitter:image" content="https://lovable.dev/opengraph-image-p98pqg.png" />
+    <div id="hint">[DRAG TO ROTATE] - [CLICK CARD TO ACCESS ARCHIVE]</div>
 
-    <style>
-      html, body {
-        overflow: hidden;
-        touch-action: none;
-      }
-    </style>
-  </head>
+    <div id="expanded-card">
+        <div class="card-content">
+            <button class="close-btn" title="Close Archive">X</button>
+            
+            <div class="card-header">
+                <span class="system-tag">DE-ENCRYPTION SUCCESSFUL</span>
+                <h2 class="card-title">NAME</h2>
+            </div>
+            
+            <p class="card-desc">DESCRIPTION</p>
+            
+            <div class="stats-row" style="display:flex; gap:20px; font-weight:bold;">
+                <div class="stat">SPD: <span id="stat-spd">--</span></div>
+                <div class="stat">PWR: <span id="stat-pwr">--</span></div>
+            </div>
+            
+            <button class="select-btn">INITIATE DEPLOYMENT</button>
+        </div>
+    </div>
 
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
+    <script type="module" src="main.js"></script>
+
+</body>
 </html>
