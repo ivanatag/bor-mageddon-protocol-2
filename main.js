@@ -5,12 +5,13 @@ import * as THREE from 'https://cdn.skypack.dev/three@0.128.0';
   
   // PRIMARY URLS
   const RAW_URL = 'https://raw.githubusercontent.com/ivanatag/bor-mageddon-protocol-2/main/public/assets/images/characters/';
+  // Updated URL to point to your new upload
   const BGM_URL = 'https://raw.githubusercontent.com/ivanatag/bor-mageddon-protocol-2/main/public/assets/audio/bgm/bormageddon-character-menu-soundtrack.wav';
 
   const cardsData = [
-    { id: 'marko', title: 'MARKO', accent: '#ff4444', spd: 55, pwr: 90, gradient: ['#3a1010', '#150505'], label: 'ID: 8492-M', file: 'marko_idle.png', desc: 'Former RTB Bor Miner. Optimized movement for heavy assault.' },
-    { id: 'maja', title: 'MAJA', accent: '#44ff44', spd: 95, pwr: 65, gradient: ['#103a15', '#051505'], label: 'ID: UNKNOWN', file: 'maja_idle.png', desc: 'Underground smuggler. High agility and combat prowess.' },
-    { id: 'darko', title: 'DARKO', accent: '#44aaff', spd: 70, pwr: 75, gradient: ['#10203a', '#050a15'], label: 'ID: 1104-D', file: 'darko_idle.png', desc: 'Dizel enforcer. High melee damage with a baseball bat.' }
+    { id: 'marko', title: 'MARKO', accent: '#ff4444', spd: 55, pwr: 90, gradient: ['#3a1010', '#150505'], label: 'ID: 8492-M', file: 'marko_idle.png', desc: 'Former RTB Bor Miner. Optimized movement for heavy assault. Absorbs massive damage.' },
+    { id: 'maja', title: 'MAJA', accent: '#44ff44', spd: 95, pwr: 65, gradient: ['#103a15', '#051505'], label: 'ID: UNKNOWN', file: 'maja_idle.png', desc: 'Underground smuggler. High agility and reinforced combat prowess.' },
+    { id: 'darko', title: 'DARKO', accent: '#44aaff', spd: 70, pwr: 75, gradient: ['#10203a', '#050a15'], label: 'ID: 1104-D', file: 'darko_idle.png', desc: 'Dizel enforcer. High melee damage with a baseball bat. Features "Air Guitar" sonic special.' }
   ];
 
   // 1. ENGINE SETUP
@@ -28,8 +29,6 @@ import * as THREE from 'https://cdn.skypack.dev/three@0.128.0';
   camera.add(listener);
   const soundtrack = new THREE.Audio(listener);
   const audioLoader = new THREE.AudioLoader();
-
-  console.log("AUDIO: System initialized.");
 
   // 3. TEXTURE BUILDERS
   function createTitleTexture() {
@@ -56,24 +55,21 @@ import * as THREE from 'https://cdn.skypack.dev/three@0.128.0';
   }
 
   // 4. MAIN FLOW CONTROL
+  let inputLocked = true; // Prevents "Clicking through" the Initialize button onto a card
+
   const initializeTerminal = () => {
     document.getElementById('start-overlay').style.display = 'none';
     document.getElementById('boot-screen').style.display = 'block';
 
-    // Resume Audio Context
     const audioCtx = THREE.AudioContext.getContext();
     if (audioCtx.state === 'suspended') audioCtx.resume();
 
-    // Load and Play Audio
     audioLoader.load(BGM_URL, (buffer) => {
-        console.log("AUDIO: Loaded.");
         soundtrack.setBuffer(buffer);
         soundtrack.setLoop(true);
         soundtrack.setVolume(0.5);
         soundtrack.play();
-    }, 
-    undefined, 
-    (err) => { console.error("AUDIO ERROR: Check if file exists at URL", err); alert("Audio File Not Found on GitHub (404)"); });
+    }, undefined, (err) => console.error("Audio Load Error. Check URL."));
 
     runBoot();
   };
@@ -91,7 +87,10 @@ import * as THREE from 'https://cdn.skypack.dev/three@0.128.0';
         setTimeout(() => {
           const bs = document.getElementById('boot-screen');
           bs.style.opacity = '0';
-          setTimeout(() => { bs.style.display = 'none'; }, 600);
+          setTimeout(() => { 
+            bs.style.display = 'none'; 
+            inputLocked = false; // Unlock clicks only after boot is done
+          }, 600);
         }, 600);
       }
     }, 300);
@@ -120,24 +119,48 @@ import * as THREE from 'https://cdn.skypack.dev/three@0.128.0';
   let currentAngle = 0, targetAngle = 0, isDragging = false, lastX = 0, totalMove = 0;
   const raycaster = new THREE.Raycaster(); const mouse = new THREE.Vector2();
 
-  window.addEventListener('mousedown', e => { isDragging = true; lastX = e.clientX; totalMove = 0; });
-  window.addEventListener('mousemove', e => {
-    if(isDragging) { targetAngle += (e.clientX - lastX) * 0.01; totalMove += Math.abs(e.clientX - lastX); lastX = e.clientX; }
-    mouse.x = (e.clientX / window.innerWidth) * 2 - 1; mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
-    raycaster.setFromCamera(mouse, camera); document.body.style.cursor = raycaster.intersectObjects(cardMeshes).length > 0 ? 'pointer' : 'default';
+  window.addEventListener('mousedown', e => { 
+    if (inputLocked) return;
+    isDragging = true; lastX = e.clientX; totalMove = 0; 
   });
+  
+  window.addEventListener('mousemove', e => {
+    if (inputLocked || !isDragging) return;
+    targetAngle += (e.clientX - lastX) * 0.01; 
+    totalMove += Math.abs(e.clientX - lastX); 
+    lastX = e.clientX;
+    
+    mouse.x = (e.clientX / window.innerWidth) * 2 - 1; 
+    mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+    raycaster.setFromCamera(mouse, camera); 
+    document.body.style.cursor = raycaster.intersectObjects(cardMeshes).length > 0 ? 'pointer' : 'default';
+  });
+
   window.addEventListener('mouseup', e => {
-    isDragging = false; targetAngle = Math.round(targetAngle / ANGLE_STEP) * ANGLE_STEP;
+    if (inputLocked) return;
+    isDragging = false; 
+    targetAngle = Math.round(targetAngle / ANGLE_STEP) * ANGLE_STEP;
     if (totalMove < 8) {
       const hits = raycaster.intersectObjects(cardMeshes);
       if (hits.length > 0) {
         const d = cardsData[hits[0].object.userData.index];
         const el = document.getElementById('expanded-card');
-        el.querySelector('.card-title').textContent = d.title; el.querySelector('.card-desc').textContent = d.desc;
-        el.querySelector('#stat-spd').textContent = d.spd; el.querySelector('#stat-pwr').textContent = d.pwr;
-        el.querySelector('.card-content').style.borderColor = d.accent; el.style.display = 'flex';
+        el.querySelector('.card-title').textContent = d.title; 
+        el.querySelector('.card-desc').textContent = d.desc;
+        el.querySelector('#stat-spd').textContent = d.spd; 
+        el.querySelector('#stat-pwr').textContent = d.pwr;
+        el.querySelector('.card-content').style.borderColor = d.accent; 
+        el.style.display = 'flex';
         setTimeout(() => el.classList.add('active'), 10);
       }
+    }
+  });
+
+  // Close Logic
+  document.addEventListener('click', (e) => {
+    if (e.target.classList.contains('close-btn') || e.target.id === 'expanded-card') {
+      const el = document.getElementById('expanded-card'); 
+      if (el) { el.classList.remove('active'); setTimeout(() => { el.style.display = 'none'; }, 300); }
     }
   });
 
@@ -147,7 +170,9 @@ import * as THREE from 'https://cdn.skypack.dev/three@0.128.0';
     currentAngle += (targetAngle - currentAngle) * 0.1;
     cardMeshes.forEach((m, i) => {
       const theta = currentAngle + (i * ANGLE_STEP);
-      m.position.x = Math.sin(theta) * RADIUS; m.position.z = Math.cos(theta) * RADIUS - RADIUS; m.rotation.y = theta;
+      m.position.x = Math.sin(theta) * RADIUS; 
+      m.position.z = Math.cos(theta) * RADIUS - RADIUS; 
+      m.rotation.y = theta;
     });
     titleMesh.material.opacity = 0.2 + Math.abs(Math.sin(time * 0.001)) * 0.15;
     renderer.render(scene, camera);
