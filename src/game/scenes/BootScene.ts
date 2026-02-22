@@ -66,6 +66,11 @@ export class BootScene extends Phaser.Scene {
       frameHeight: 64,
     });
 
+    // ── Environment backgrounds (Part 1) ──
+    this.load.image('part1_sky', 'assets/images/environments/part1_sky.png');
+    this.load.image('part1_mid', 'assets/images/environments/part1_mid.png');
+    this.load.image('part1_floor', 'assets/images/environments/part1_floor.png');
+
     this.createPlaceholderAssets();
   }
 
