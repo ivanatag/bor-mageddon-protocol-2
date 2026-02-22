@@ -1,25 +1,7 @@
 import * as THREE from 'https://cdn.skypack.dev/three@0.128.0';
 
 (() => {
-  // 1. BOOT SEQUENCE
-  const bootLines = ["> SYNCING RTB-BOR ARCHIVES...", "> DETECTING COPPER DEPOSITS...", "> ACCESS GRANTED."];
-  const bootTextEl = document.getElementById('boot-text');
-  let lineIdx = 0;
-  function runBoot() {
-    if (lineIdx < bootLines.length) {
-      bootTextEl.innerHTML += bootLines[lineIdx] + "<br>";
-      lineIdx++;
-      setTimeout(runBoot, 200);
-    } else {
-      setTimeout(() => {
-        const bs = document.getElementById('boot-screen');
-        if (bs) { bs.style.opacity = '0'; setTimeout(() => bs.style.display = 'none', 600); }
-      }, 600);
-    }
-  }
-  runBoot();
-
-  // 2. THEME & SCENE
+  // 1. THEME & CONFIG
   const theme = { bg: 0x0a0502, fog: 0x220f05, particle: 0xffa544, ambient: 0x442211, point: 0xff6622 };
   const RAW_URL = 'https://raw.githubusercontent.com/ivanatag/bor-mageddon-protocol-2/main/public/assets/images/characters/';
   
@@ -28,9 +10,6 @@ import * as THREE from 'https://cdn.skypack.dev/three@0.128.0';
     { id: 'maja', title: 'MAJA', accent: '#44ff44', spd: 95, pwr: 65, gradient: ['#103a15', '#051505'], label: 'ID: UNKNOWN', file: 'maja_idle.png', desc: 'Underground smuggler. High agility and reinforced combat prowess. Fragile health.' },
     { id: 'darko', title: 'DARKO', accent: '#44aaff', spd: 70, pwr: 75, gradient: ['#10203a', '#050a15'], label: 'ID: 1104-D', file: 'darko_idle.png', desc: 'Dizel enforcer. High melee damage with a bat. Features "Air Guitar" sonic special.' }
   ];
-
-  const RADIUS = 3.8;
-  const ANGLE_STEP = (Math.PI * 2) / cardsData.length;
 
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(theme.bg);
@@ -48,49 +27,25 @@ import * as THREE from 'https://cdn.skypack.dev/three@0.128.0';
   spotLight.position.set(0, 5, 8);
   scene.add(spotLight);
 
-  // 3. TITLE SYSTEM: METAL MANIA & DEPTH FIX
+  // 2. TEXTURE GENERATORS
   function createTitleTexture() {
     const c = document.createElement('canvas');
     c.width = 1024; c.height = 256;
     const ctx = c.getContext('2d');
     ctx.textAlign = 'center';
     
-    // Switch font to Metal Mania
-    ctx.font = '900 140px "Metal Mania", cursive';
+    // Explicitly using the font name from Google Fonts
+    ctx.font = '900 150px "Metal Mania"';
     
-    // Shadow
+    // Layered "Chunky" Metal look
     ctx.fillStyle = '#110400'; ctx.fillText('BORMAGEDDON', 512+12, 128+12);
-    // Main Rust Color
+    ctx.fillStyle = '#331100'; ctx.fillText('BORMAGEDDON', 512+6, 128+6);
     ctx.fillStyle = '#ff4400'; ctx.fillText('BORMAGEDDON', 512, 128);
     
     const tex = new THREE.CanvasTexture(c);
     return tex;
   }
 
-  const titleMesh = new THREE.Mesh(
-    new THREE.PlaneGeometry(26, 8),
-    new THREE.MeshBasicMaterial({ 
-        map: createTitleTexture(), 
-        transparent: true, 
-        opacity: 0.3,
-        fog: false,
-        depthWrite: false // CRITICAL: Fixes the weird box overlay in the center
-    })
-  );
-  // Lowered and centered
-  titleMesh.position.set(0, 0, -6); 
-  scene.add(titleMesh);
-
-  // 4. ASH SYSTEM
-  const ashCount = 1000;
-  const ashGeo = new THREE.BufferGeometry();
-  const ashPos = new Float32Array(ashCount * 3);
-  for(let i=0; i < ashCount * 3; i++) ashPos[i] = (Math.random() - 0.5) * 25;
-  ashGeo.setAttribute('position', new THREE.BufferAttribute(ashPos, 3));
-  const ashSystem = new THREE.Points(ashGeo, new THREE.PointsMaterial({ size: 0.08, color: theme.particle, transparent: true, opacity: 0.5 }));
-  scene.add(ashSystem);
-
-  // 5. CARD GENERATOR
   function createCardTexture(card, img = null) {
     const c = document.createElement('canvas');
     c.width = 512; c.height = 700;
@@ -106,130 +61,120 @@ import * as THREE from 'https://cdn.skypack.dev/three@0.128.0';
       ctx.shadowBlur = 0;
     }
 
-    // Noise & Cracks
-    for (let i = 0; i < 4000; i++) {
-        ctx.fillStyle = `rgba(0,0,0,${Math.random() * 0.15})`;
+    // 16-bit Grain & Rust
+    for (let i = 0; i < 3000; i++) {
+        ctx.fillStyle = `rgba(0,0,0,${Math.random() * 0.1})`;
         ctx.fillRect(Math.random()*512, Math.random()*700, 2, 2);
     }
-    ctx.strokeStyle = "rgba(255,255,255,0.25)"; ctx.lineWidth = 2;
-    for(let i=0; i<4; i++){
-        let x = Math.random()*512, y = Math.random()*700;
-        ctx.beginPath(); ctx.moveTo(x,y);
-        for(let j=0; j<4; j++) { x+=(Math.random()-0.5)*200; y+=(Math.random()-0.5)*200; ctx.lineTo(x,y); }
-        ctx.stroke();
-    }
 
-    // Borders & UI
     ctx.strokeStyle = "#000"; ctx.lineWidth = 40; ctx.strokeRect(0,0,512,700);
     ctx.strokeStyle = card.accent; ctx.lineWidth = 20; ctx.strokeRect(10,10,492,680);
-    ctx.fillStyle = card.accent; ctx.font = 'bold 24px "Space Mono", monospace'; ctx.fillText(card.label, 50, 75);
-    ctx.fillStyle = '#fff'; ctx.font = 'bold 70px "Space Mono", monospace'; ctx.fillText(card.title, 50, 610);
-    return new THREE.CanvasTexture(c);
+    
+    ctx.fillStyle = card.accent; ctx.font = 'bold 24px "Space Mono"'; ctx.fillText(card.label, 50, 75);
+    // Metal Mania for names
+    ctx.fillStyle = '#fff'; ctx.font = '70px "Metal Mania"'; ctx.fillText(card.title, 50, 610);
+    
+    const tex = new THREE.CanvasTexture(c);
+    tex.magFilter = THREE.NearestFilter;
+    return tex;
   }
 
-  const cardMeshes = [];
-  cardsData.forEach((card, i) => {
-    const mesh = new THREE.Mesh(
-      new THREE.BoxGeometry(4, 6, 0.2),
-      [
-        new THREE.MeshStandardMaterial({color: 0x1a0a05}), new THREE.MeshStandardMaterial({color: 0x1a0a05}),
-        new THREE.MeshStandardMaterial({color: 0x1a0a05}), new THREE.MeshStandardMaterial({color: 0x1a0a05}),
-        new THREE.MeshStandardMaterial({transparent: true, emissive: 0x111111}), new THREE.MeshStandardMaterial({color: 0x000000})
-      ]
+  // 3. INITIALIZE AFTER FONTS ARE READY
+  document.fonts.ready.then(() => {
+    // Title Plane (Unfogged, Lowered)
+    const titleMesh = new THREE.Mesh(
+      new THREE.PlaneGeometry(28, 8),
+      new THREE.MeshBasicMaterial({ map: createTitleTexture(), transparent: true, opacity: 0.3, fog: false, depthWrite: false })
     );
-    mesh.userData = { index: i };
-    scene.add(mesh);
-    cardMeshes.push(mesh);
-    
-    mesh.material[4].map = createCardTexture(card);
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.onload = () => {
-        mesh.material[4].map = createCardTexture(card, img);
-        mesh.material[4].map.magFilter = THREE.NearestFilter;
-        mesh.material[4].needsUpdate = true;
-    };
-    img.src = RAW_URL + card.file + "?t=" + Date.now();
-  });
+    titleMesh.position.set(0, -0.5, -6); // Lowered and centered
+    scene.add(titleMesh);
 
-  // 6. INTERACTION & CLOSING
-  let currentAngle = 0, targetAngle = 0, isDragging = false, lastX = 0, totalMove = 0;
-  const raycaster = new THREE.Raycaster();
-  const mouse = new THREE.Vector2();
+    // Cards
+    const cardMeshes = [];
+    const RADIUS = 3.8;
+    const ANGLE_STEP = (Math.PI * 2) / cardsData.length;
 
-  const closeArchive = () => {
-    const el = document.getElementById('expanded-card');
-    if (el) {
-        el.classList.remove('active');
-        setTimeout(() => { el.style.display = 'none'; }, 300);
-    }
-  };
+    cardsData.forEach((card, i) => {
+      const mesh = new THREE.Mesh(
+        new THREE.BoxGeometry(4, 6, 0.2),
+        [
+          new THREE.MeshStandardMaterial({color: 0x1a0a05}), new THREE.MeshStandardMaterial({color: 0x1a0a05}),
+          new THREE.MeshStandardMaterial({color: 0x1a0a05}), new THREE.MeshStandardMaterial({color: 0x1a0a05}),
+          new THREE.MeshStandardMaterial({transparent: true, emissive: 0x111111}), new THREE.MeshStandardMaterial({color: 0x000000})
+        ]
+      );
+      mesh.userData = { index: i };
+      scene.add(mesh);
+      cardMeshes.push(mesh);
+      mesh.material[4].map = createCardTexture(card);
 
-  const closeBtn = document.querySelector('.close-btn');
-  if(closeBtn) closeBtn.onclick = closeArchive;
-
-  const overlay = document.getElementById('expanded-card');
-  if(overlay) {
-    overlay.addEventListener('click', (e) => {
-      if (e.target.id === 'expanded-card') closeArchive();
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.onload = () => {
+          mesh.material[4].map = createCardTexture(card, img);
+          mesh.material[4].needsUpdate = true;
+      };
+      img.src = RAW_URL + card.file + "?t=" + Date.now();
     });
-  }
 
-  window.addEventListener('mousedown', e => { isDragging = true; lastX = e.clientX; totalMove = 0; });
-  window.addEventListener('mousemove', e => {
-    if(isDragging) { targetAngle += (e.clientX - lastX) * 0.01; totalMove += Math.abs(e.clientX - lastX); lastX = e.clientX; }
-    mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
-    mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
-    raycaster.setFromCamera(mouse, camera);
-    document.body.style.cursor = raycaster.intersectObjects(cardMeshes).length > 0 ? 'pointer' : 'default';
-  });
-  window.addEventListener('mouseup', e => {
-    isDragging = false;
-    targetAngle = Math.round(targetAngle / ANGLE_STEP) * ANGLE_STEP;
-    if (totalMove < 8) {
-      const hits = raycaster.intersectObjects(cardMeshes);
-      if (hits.length > 0) {
-          const idx = hits[0].object.userData.index;
-          const d = cardsData[idx];
-          const el = document.getElementById('expanded-card');
-          el.querySelector('.card-title').textContent = d.title;
-          el.querySelector('.card-desc').textContent = d.desc;
-          el.querySelector('#stat-spd').textContent = d.spd;
-          el.querySelector('#stat-pwr').textContent = d.pwr;
-          el.querySelector('.card-content').style.borderColor = d.accent;
-          el.style.display = 'flex';
-          setTimeout(() => el.classList.add('active'), 10);
+    // Ash System
+    const ashCount = 800;
+    const ashGeo = new THREE.BufferGeometry();
+    const ashPos = new Float32Array(ashCount * 3);
+    for(let i=0; i < ashCount * 3; i++) ashPos[i] = (Math.random() - 0.5) * 20;
+    ashGeo.setAttribute('position', new THREE.BufferAttribute(ashPos, 3));
+    const ashSystem = new THREE.Points(ashGeo, new THREE.PointsMaterial({ size: 0.08, color: theme.particle, transparent: true, opacity: 0.5 }));
+    scene.add(ashSystem);
+
+    // 4. INTERACTION
+    let currentAngle = 0, targetAngle = 0, isDragging = false, lastX = 0, totalMove = 0;
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+
+    window.addEventListener('mousedown', e => { isDragging = true; lastX = e.clientX; totalMove = 0; });
+    window.addEventListener('mousemove', e => {
+      if(isDragging) { targetAngle += (e.clientX - lastX) * 0.01; totalMove += Math.abs(e.clientX - lastX); lastX = e.clientX; }
+      mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+      mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+      raycaster.setFromCamera(mouse, camera);
+      document.body.style.cursor = raycaster.intersectObjects(cardMeshes).length > 0 ? 'pointer' : 'default';
+    });
+    window.addEventListener('mouseup', e => {
+      isDragging = false;
+      targetAngle = Math.round(targetAngle / ANGLE_STEP) * ANGLE_STEP;
+      if (totalMove < 8) {
+        const hits = raycaster.intersectObjects(cardMeshes);
+        if (hits.length > 0) {
+            const d = cardsData[hits[0].object.userData.index];
+            const el = document.getElementById('expanded-card');
+            el.querySelector('.card-title').textContent = d.title;
+            el.querySelector('.card-desc').textContent = d.desc;
+            el.querySelector('#stat-spd').textContent = d.spd;
+            el.querySelector('#stat-pwr').textContent = d.pwr;
+            el.querySelector('.card-content').style.borderColor = d.accent;
+            el.style.display = 'flex';
+            setTimeout(() => el.classList.add('active'), 10);
+        }
       }
-    }
-  });
-
-  function animate(time) {
-    requestAnimationFrame(animate);
-    if(!isDragging) targetAngle += 0.002;
-    currentAngle += (targetAngle - currentAngle) * 0.1;
-    
-    cardMeshes.forEach((m, i) => {
-      const theta = currentAngle + (i * ANGLE_STEP);
-      m.position.x = Math.sin(theta) * RADIUS;
-      m.position.z = Math.cos(theta) * RADIUS - RADIUS;
-      m.rotation.y = theta;
     });
 
-    const positions = ashSystem.geometry.attributes.position.array;
-    for(let i=1; i < positions.length; i+=3) {
-        positions[i] += 0.02; if (positions[i] > 12) positions[i] = -12;
+    // 5. ANIMATION
+    function animate(time) {
+      requestAnimationFrame(animate);
+      if(!isDragging) targetAngle += 0.002;
+      currentAngle += (targetAngle - currentAngle) * 0.1;
+      cardMeshes.forEach((m, i) => {
+        const theta = currentAngle + (i * ANGLE_STEP);
+        m.position.x = Math.sin(theta) * RADIUS;
+        m.position.z = Math.cos(theta) * RADIUS - RADIUS;
+        m.rotation.y = theta;
+      });
+      const pos = ashSystem.geometry.attributes.position.array;
+      for(let i=1; i < pos.length; i+=3) { pos[i] += 0.02; if (pos[i] > 10) pos[i] = -10; }
+      ashSystem.geometry.attributes.position.needsUpdate = true;
+      titleMesh.material.opacity = 0.2 + Math.abs(Math.sin(time * 0.001)) * 0.15;
+      renderer.render(scene, camera);
     }
-    ashSystem.geometry.attributes.position.needsUpdate = true;
-
-    titleMesh.material.opacity = 0.2 + Math.abs(Math.sin(time * 0.001)) * 0.15;
-
-    renderer.render(scene, camera);
-  }
-  animate();
-
-  window.addEventListener('resize', () => {
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
+    animate();
   });
 })();
