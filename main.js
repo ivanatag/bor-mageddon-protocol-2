@@ -3,6 +3,7 @@ import * as THREE from 'https://cdn.skypack.dev/three@0.128.0';
 // 1. DATA & THEME CONFIG
 const theme = { bg: 0x0a0502, fog: 0x220f05, particle: 0xffa544, ambient: 0x442211, point: 0xff6622 };
 const RAW_URL = 'https://raw.githubusercontent.com/ivanatag/bor-mageddon-protocol-2/main/public/assets/images/characters/';
+const BGM_URL = 'https://raw.githubusercontent.com/ivanatag/bor-mageddon-protocol-2/main/public/assets/audio/bgm/bormageddon-character-menu-soundtrack.wav';
 
 const cardsData = [
   { id: 'marko', title: 'MARKO', accent: '#ff4444', spd: 55, pwr: 90, gradient: ['#3a1010', '#150505'], label: 'ID: 8492-M', file: 'marko_idle.png', desc: 'Former RTB Bor Miner. Optimized movement speed for heavy assault. Absorbs massive damage.' },
@@ -10,8 +11,8 @@ const cardsData = [
   { id: 'darko', title: 'DARKO', accent: '#44aaff', spd: 70, pwr: 75, gradient: ['#10203a', '#050a15'], label: 'ID: 1104-D', file: 'darko_idle.png', desc: 'Dizel enforcer. High melee damage with a bat. Features "Air Guitar" sonic special.' }
 ];
 
-// 2. BOOT SEQUENCE
-function runBoot() {
+// 2. BOOT SEQUENCE & AUDIO TRIGGER
+function runBoot(startAudioCallback) {
   const bootLines = ["> SYNCING RTB-BOR ARCHIVES...", "> DETECTING COPPER DEPOSITS...", "> ACCESS GRANTED."];
   const bootTextEl = document.getElementById('boot-text');
   if (!bootTextEl) return;
@@ -24,7 +25,14 @@ function runBoot() {
       clearInterval(timer);
       setTimeout(() => {
         const bs = document.getElementById('boot-screen');
-        if (bs) { bs.style.opacity = '0'; setTimeout(() => bs.style.display = 'none', 600); }
+        if (bs) { 
+          bs.style.opacity = '0'; 
+          setTimeout(() => {
+            bs.style.display = 'none';
+            // Start the music after the interaction of the boot sequence finishing
+            startAudioCallback(); 
+          }, 600); 
+        }
       }, 600);
     }
   }, 250);
@@ -56,7 +64,7 @@ function createCardTexture(card, img = null) {
   ctx.strokeStyle = "#000"; ctx.lineWidth = 40; ctx.strokeRect(0,0,512,700);
   ctx.strokeStyle = card.accent; ctx.lineWidth = 20; ctx.strokeRect(10,10,492,680);
   ctx.fillStyle = card.accent; ctx.font = 'bold 24px "Space Mono", monospace'; ctx.fillText(card.label, 50, 75);
-  ctx.fillStyle = '#fff'; ctx.font = '60px "Metal Mania", Impact, sans-serif'; ctx.fillText(card.title, 50, 610);
+  ctx.fillStyle = '#fff'; ctx.font = 'bold 75px "Space Mono", monospace'; ctx.fillText(card.title, 50, 610);
   const tex = new THREE.CanvasTexture(c);
   tex.magFilter = THREE.NearestFilter;
   return tex;
@@ -64,8 +72,6 @@ function createCardTexture(card, img = null) {
 
 // 4. MAIN APPLICATION
 window.addEventListener('load', () => {
-  runBoot();
-
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(theme.bg);
   scene.fog = new THREE.FogExp2(theme.fog, 0.08);
@@ -76,6 +82,24 @@ window.addEventListener('load', () => {
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
   document.body.prepend(renderer.domElement);
+
+  // --- AUDIO SETUP ---
+  const listener = new THREE.AudioListener();
+  camera.add(listener);
+  const sound = new THREE.Audio(listener);
+  const audioLoader = new THREE.AudioLoader();
+  
+  audioLoader.load(BGM_URL, (buffer) => {
+    sound.setBuffer(buffer);
+    sound.setLoop(true);
+    sound.setVolume(0.5);
+  });
+
+  const startBGM = () => {
+    if (sound.buffer && !sound.isPlaying) sound.play();
+  };
+
+  runBoot(startBGM);
 
   scene.add(new THREE.AmbientLight(theme.ambient, 0.6));
   const spotLight = new THREE.PointLight(theme.point, 5, 25);
@@ -118,12 +142,16 @@ window.addEventListener('load', () => {
     img.src = RAW_URL + card.file + "?t=" + Date.now();
   });
 
-  // Interaction
+  // Interaction & Animation
   let currentAngle = 0, targetAngle = 0, isDragging = false, lastX = 0, totalMove = 0;
   const raycaster = new THREE.Raycaster();
   const mouse = new THREE.Vector2();
 
-  window.addEventListener('mousedown', e => { isDragging = true; lastX = e.clientX; totalMove = 0; });
+  window.addEventListener('mousedown', e => { 
+    isDragging = true; lastX = e.clientX; totalMove = 0; 
+    startBGM(); // Resume audio if browser blocked initial play
+  });
+
   window.addEventListener('mousemove', e => {
     if(isDragging) { targetAngle += (e.clientX - lastX) * 0.01; totalMove += Math.abs(e.clientX - lastX); lastX = e.clientX; }
     mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
@@ -131,6 +159,7 @@ window.addEventListener('load', () => {
     raycaster.setFromCamera(mouse, camera);
     document.body.style.cursor = raycaster.intersectObjects(cardMeshes).length > 0 ? 'pointer' : 'default';
   });
+
   window.addEventListener('mouseup', e => {
     isDragging = false;
     targetAngle = Math.round(targetAngle / ANGLE_STEP) * ANGLE_STEP;
@@ -152,7 +181,6 @@ window.addEventListener('load', () => {
     }
   });
 
-  // Close Logic
   document.addEventListener('click', (e) => {
     if (e.target.classList.contains('close-btn') || e.target.id === 'expanded-card') {
       const el = document.getElementById('expanded-card');
@@ -160,7 +188,6 @@ window.addEventListener('load', () => {
     }
   });
 
-  // Animation
   function animate(time) {
     requestAnimationFrame(animate);
     if(!isDragging) targetAngle += 0.002;
