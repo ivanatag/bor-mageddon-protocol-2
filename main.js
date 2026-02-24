@@ -1,11 +1,10 @@
 import * as THREE from 'https://cdn.skypack.dev/three@0.128.0';
 
-(() => {
+window.addEventListener('DOMContentLoaded', () => {
   const theme = { bg: 0x0a0502, fog: 0x220f05, particle: 0xffa544, ambient: 0x442211, point: 0xff6622 };
   const RAW_URL = 'https://raw.githubusercontent.com/ivanatag/bor-mageddon-protocol-2/main/public/assets/images/characters/';
   const BGM_URL = 'https://raw.githubusercontent.com/ivanatag/bor-mageddon-protocol-2/main/public/assets/audio/bgm/bormageddon-character-menu-soundtrack.wav';
 
-  // --- UPDATED TEEN CHARACTER PROFILES ---
   const cardsData = [
     { 
       id: 'marko', title: 'MARKO', accent: '#ff4444', spd: 55, pwr: 90, gradient: ['#3a1010', '#150505'], label: 'AGE: 16', file: 'marko_idle.png', 
@@ -73,27 +72,35 @@ import * as THREE from 'https://cdn.skypack.dev/three@0.128.0';
 
   // --- FLOW CONTROL ---
   let inputLocked = true;
+  
   const initializeTerminal = () => {
     document.getElementById('start-overlay').style.display = 'none';
     document.getElementById('boot-screen').style.display = 'block';
+    
     const audioCtx = THREE.AudioContext.getContext();
     if (audioCtx.state === 'suspended') audioCtx.resume();
+    
     audioLoader.load(BGM_URL, (buffer) => {
         soundtrack.setBuffer(buffer);
         soundtrack.setLoop(true);
         soundtrack.setVolume(0.5);
         soundtrack.play();
     });
+    
     runBoot();
   };
 
-  document.getElementById('initialize-btn').onclick = initializeTerminal;
+  // This is what was failing before! Now it's safely inside DOMContentLoaded
+  const initBtn = document.getElementById('initialize-btn');
+  if (initBtn) initBtn.onclick = initializeTerminal;
 
   const musicBtn = document.getElementById('music-toggle');
-  musicBtn.onclick = () => {
-    if (soundtrack.isPlaying) { soundtrack.pause(); musicBtn.textContent = 'AUDIO: [OFF]'; } 
-    else { soundtrack.play(); musicBtn.textContent = 'AUDIO: [ON]'; }
-  };
+  if (musicBtn) {
+    musicBtn.onclick = () => {
+      if (soundtrack.isPlaying) { soundtrack.pause(); musicBtn.textContent = 'AUDIO: [OFF]'; } 
+      else { soundtrack.play(); musicBtn.textContent = 'AUDIO: [ON]'; }
+    };
+  }
 
   function runBoot() {
     const bootLines = ["> SYNCING RTB-BOR ARCHIVES...", "> DETECTING COPPER...", "> ACCESS GRANTED."];
@@ -119,4 +126,107 @@ import * as THREE from 'https://cdn.skypack.dev/three@0.128.0';
   const cardMeshes = [];
   const RADIUS = 3.8; const ANGLE_STEP = (Math.PI * 2) / cardsData.length;
   cardsData.forEach((card, i) => {
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(4, 6, 0.2), [new THREE.MeshStandardMaterial
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(4, 6, 0.2), [new THREE.MeshStandardMaterial({color: 0x1a0a05}), new THREE.MeshStandardMaterial({color: 0x1a0a05}), new THREE.MeshStandardMaterial({color: 0x1a0a05}), new THREE.MeshStandardMaterial({color: 0x1a0a05}), new THREE.MeshStandardMaterial({transparent: true, emissive: 0x111111}), new THREE.MeshStandardMaterial({color: 0x000000})]);
+    mesh.userData = { index: i }; scene.add(mesh); cardMeshes.push(mesh);
+    mesh.material[4].map = createCardTexture(card);
+    const img = new Image(); img.crossOrigin = "anonymous";
+    img.onload = () => { mesh.material[4].map = createCardTexture(card, img); mesh.material[4].needsUpdate = true; };
+    img.src = RAW_URL + card.file;
+  });
+
+  scene.add(new THREE.AmbientLight(theme.ambient, 0.6));
+  const spotLight = new THREE.PointLight(theme.point, 5, 25);
+  spotLight.position.set(0, 5, 8);
+  scene.add(spotLight);
+
+  // --- INTERACTION & DRIFT TIMER ---
+  let currentAngle = 0, targetAngle = 0, isDragging = false, lastX = 0, totalMove = 0;
+  const raycaster = new THREE.Raycaster(); const mouse = new THREE.Vector2();
+
+  let isDrifting = true;
+  let driftTimeout = null;
+
+  function resetDriftTimer() {
+    isDrifting = false; 
+    if (driftTimeout) clearTimeout(driftTimeout); 
+    driftTimeout = setTimeout(() => { isDrifting = true; }, 3000); 
+  }
+
+  window.addEventListener('mousedown', e => { 
+    if (inputLocked) return; 
+    isDragging = true; lastX = e.clientX; totalMove = 0; 
+    isDrifting = false; 
+  });
+  
+  window.addEventListener('mousemove', e => {
+    if (inputLocked || !isDragging) return;
+    targetAngle += (e.clientX - lastX) * 0.01; totalMove += Math.abs(e.clientX - lastX); lastX = e.clientX;
+    mouse.x = (e.clientX / window.innerWidth) * 2 - 1; mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+    raycaster.setFromCamera(mouse, camera); document.body.style.cursor = raycaster.intersectObjects(cardMeshes).length > 0 ? 'pointer' : 'default';
+  });
+  
+  window.addEventListener('mouseup', e => {
+    if (inputLocked) return;
+    isDragging = false; 
+    targetAngle = Math.round(targetAngle / ANGLE_STEP) * ANGLE_STEP;
+    resetDriftTimer(); 
+
+    if (totalMove < 8) {
+      const hits = raycaster.intersectObjects(cardMeshes);
+      if (hits.length > 0) {
+        const d = cardsData[hits[0].object.userData.index];
+        const el = document.getElementById('expanded-card');
+        el.querySelector('.card-title').textContent = d.title; el.querySelector('.card-desc').textContent = d.desc;
+        el.querySelector('#stat-spd').textContent = d.spd; el.querySelector('#stat-pwr').textContent = d.pwr;
+        el.querySelector('.card-content').style.borderColor = d.accent; el.style.display = 'flex';
+        setTimeout(() => el.classList.add('active'), 10);
+      }
+    }
+  });
+
+  window.addEventListener('keydown', (e) => {
+    if (inputLocked) return;
+    const popup = document.getElementById('expanded-card');
+    if (popup && popup.classList.contains('active')) return;
+
+    if (e.key === 'ArrowLeft' || e.key.toLowerCase() === 'a') {
+        targetAngle = Math.round(targetAngle / ANGLE_STEP) * ANGLE_STEP + ANGLE_STEP;
+        resetDriftTimer(); 
+    }
+    else if (e.key === 'ArrowRight' || e.key.toLowerCase() === 'd') {
+        targetAngle = Math.round(targetAngle / ANGLE_STEP) * ANGLE_STEP - ANGLE_STEP;
+        resetDriftTimer(); 
+    }
+  });
+
+  document.addEventListener('click', (e) => {
+    if (e.target.classList.contains('close-btn') || e.target.id === 'expanded-card') {
+      const el = document.getElementById('expanded-card'); el.classList.remove('active');
+      setTimeout(() => { el.style.display = 'none'; }, 300);
+    }
+  });
+
+  function animate(time) {
+    requestAnimationFrame(animate);
+    
+    if(!isDragging && isDrifting) targetAngle += 0.002; 
+    currentAngle += (targetAngle - currentAngle) * 0.1;
+    
+    cardMeshes.forEach((m, i) => {
+      const theta = currentAngle + (i * ANGLE_STEP);
+      m.position.x = Math.sin(theta) * RADIUS; m.position.z = Math.cos(theta) * RADIUS - RADIUS; m.rotation.y = theta;
+    });
+
+    const pos = ashSystem.geometry.attributes.position.array;
+    for(let i = 1; i < pos.length; i += 3) {
+      pos[i] += 0.015;
+      if (pos[i] > 10) pos[i] = -10;
+    }
+    ashSystem.geometry.attributes.position.needsUpdate = true;
+
+    titleMesh.material.opacity = 0.2 + Math.abs(Math.sin(time * 0.001)) * 0.15;
+    renderer.render(scene, camera);
+  }
+  
+  animate();
+});
