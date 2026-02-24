@@ -30,7 +30,7 @@ import * as THREE from 'https://cdn.skypack.dev/three@0.128.0';
   const ashGeo = new THREE.BufferGeometry();
   const ashPos = new Float32Array(ashCount * 3);
   for(let i=0; i < ashCount * 3; i++) {
-    ashPos[i] = (Math.random() - 0.5) * 30; // Random X, Y, Z spreads
+    ashPos[i] = (Math.random() - 0.5) * 30;
   }
   ashGeo.setAttribute('position', new THREE.BufferAttribute(ashPos, 3));
   const ashMaterial = new THREE.PointsMaterial({ size: 0.08, color: theme.particle, transparent: true, opacity: 0.4 });
@@ -122,20 +122,43 @@ import * as THREE from 'https://cdn.skypack.dev/three@0.128.0';
   spotLight.position.set(0, 5, 8);
   scene.add(spotLight);
 
-  // --- ANIMATION ---
+  // --- INTERACTION & DRIFT TIMER ---
   let currentAngle = 0, targetAngle = 0, isDragging = false, lastX = 0, totalMove = 0;
   const raycaster = new THREE.Raycaster(); const mouse = new THREE.Vector2();
 
-  window.addEventListener('mousedown', e => { if (inputLocked) return; isDragging = true; lastX = e.clientX; totalMove = 0; });
+  // NEW: Variables to handle the 3-second drift pause
+  let isDrifting = true;
+  let driftTimeout = null;
+
+  function resetDriftTimer() {
+    isDrifting = false; // Stop auto-rotation
+    if (driftTimeout) clearTimeout(driftTimeout); // Clear existing timer
+    
+    // Start a new 3-second countdown before resuming drift
+    driftTimeout = setTimeout(() => {
+        isDrifting = true;
+    }, 3000); 
+  }
+
+  window.addEventListener('mousedown', e => { 
+    if (inputLocked) return; 
+    isDragging = true; lastX = e.clientX; totalMove = 0; 
+    isDrifting = false; // Stop drifting immediately when dragging
+  });
+  
   window.addEventListener('mousemove', e => {
     if (inputLocked || !isDragging) return;
     targetAngle += (e.clientX - lastX) * 0.01; totalMove += Math.abs(e.clientX - lastX); lastX = e.clientX;
     mouse.x = (e.clientX / window.innerWidth) * 2 - 1; mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
     raycaster.setFromCamera(mouse, camera); document.body.style.cursor = raycaster.intersectObjects(cardMeshes).length > 0 ? 'pointer' : 'default';
   });
+  
   window.addEventListener('mouseup', e => {
     if (inputLocked) return;
-    isDragging = false; targetAngle = Math.round(targetAngle / ANGLE_STEP) * ANGLE_STEP;
+    isDragging = false; 
+    targetAngle = Math.round(targetAngle / ANGLE_STEP) * ANGLE_STEP;
+    resetDriftTimer(); // Start the 3-second pause when you let go
+
     if (totalMove < 8) {
       const hits = raycaster.intersectObjects(cardMeshes);
       if (hits.length > 0) {
@@ -149,6 +172,23 @@ import * as THREE from 'https://cdn.skypack.dev/three@0.128.0';
     }
   });
 
+  // Keyboard Navigation with Drift Pause
+  window.addEventListener('keydown', (e) => {
+    if (inputLocked) return;
+
+    const popup = document.getElementById('expanded-card');
+    if (popup && popup.classList.contains('active')) return;
+
+    if (e.key === 'ArrowLeft' || e.key.toLowerCase() === 'a') {
+        targetAngle = Math.round(targetAngle / ANGLE_STEP) * ANGLE_STEP + ANGLE_STEP;
+        resetDriftTimer(); // Pause drift for 3 seconds
+    }
+    else if (e.key === 'ArrowRight' || e.key.toLowerCase() === 'd') {
+        targetAngle = Math.round(targetAngle / ANGLE_STEP) * ANGLE_STEP - ANGLE_STEP;
+        resetDriftTimer(); // Pause drift for 3 seconds
+    }
+  });
+
   document.addEventListener('click', (e) => {
     if (e.target.classList.contains('close-btn') || e.target.id === 'expanded-card') {
       const el = document.getElementById('expanded-card'); el.classList.remove('active');
@@ -158,7 +198,10 @@ import * as THREE from 'https://cdn.skypack.dev/three@0.128.0';
 
   function animate(time) {
     requestAnimationFrame(animate);
-    if(!isDragging) targetAngle += 0.002;
+    
+    // UPDATED: Only drift if not dragging AND the drift timer has finished
+    if(!isDragging && isDrifting) targetAngle += 0.002; 
+    
     currentAngle += (targetAngle - currentAngle) * 0.1;
     
     cardMeshes.forEach((m, i) => {
@@ -166,11 +209,10 @@ import * as THREE from 'https://cdn.skypack.dev/three@0.128.0';
       m.position.x = Math.sin(theta) * RADIUS; m.position.z = Math.cos(theta) * RADIUS - RADIUS; m.rotation.y = theta;
     });
 
-    // RISING PARTICLES LOGIC
     const pos = ashSystem.geometry.attributes.position.array;
     for(let i = 1; i < pos.length; i += 3) {
-      pos[i] += 0.015; // Move Y up
-      if (pos[i] > 10) pos[i] = -10; // Loop back to bottom
+      pos[i] += 0.015;
+      if (pos[i] > 10) pos[i] = -10;
     }
     ashSystem.geometry.attributes.position.needsUpdate = true;
 
