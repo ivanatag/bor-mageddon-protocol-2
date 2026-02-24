@@ -5,10 +5,20 @@ import * as THREE from 'https://cdn.skypack.dev/three@0.128.0';
   const RAW_URL = 'https://raw.githubusercontent.com/ivanatag/bor-mageddon-protocol-2/main/public/assets/images/characters/';
   const BGM_URL = 'https://raw.githubusercontent.com/ivanatag/bor-mageddon-protocol-2/main/public/assets/audio/bgm/bormageddon-character-menu-soundtrack.wav';
 
+  // --- UPDATED TEEN CHARACTER PROFILES ---
   const cardsData = [
-    { id: 'marko', title: 'MARKO', accent: '#ff4444', spd: 55, pwr: 90, gradient: ['#3a1010', '#150505'], label: 'ID: 8492-M', file: 'marko_idle.png', desc: 'Former RTB Bor Miner. Optimized movement for heavy assault. Absorbs massive damage.' },
-    { id: 'maja', title: 'MAJA', accent: '#44ff44', spd: 95, pwr: 65, gradient: ['#103a15', '#051505'], label: 'ID: UNKNOWN', file: 'maja_idle.png', desc: 'Underground smuggler. High agility and reinforced combat prowess.' },
-    { id: 'darko', title: 'DARKO', accent: '#44aaff', spd: 70, pwr: 75, gradient: ['#10203a', '#050a15'], label: 'ID: 1104-D', file: 'darko_idle.png', desc: 'Dizel enforcer. High melee damage with a baseball bat. Features "Air Guitar" sonic special attack.' }
+    { 
+      id: 'marko', title: 'MARKO', accent: '#ff4444', spd: 55, pwr: 90, gradient: ['#3a1010', '#150505'], label: 'AGE: 16', file: 'marko_idle.png', 
+      desc: 'Local basketball prodigy turned wasteland brawler. Fueled by heavy metal and a love for non-stop action, he acts as the tank, absorbing massive damage on the frontlines.' 
+    },
+    { 
+      id: 'maja', title: 'MAJA', accent: '#44ff44', spd: 95, pwr: 65, gradient: ['#103a15', '#051505'], label: 'AGE: 15', file: 'maja_idle.png', 
+      desc: 'Do not let the bubbly and upbeat personality fool you—she is absolutely ferocious in a fight. Her high agility makes her a lethal blur on the battlefield.' 
+    },
+    { 
+      id: 'darko', title: 'DARKO', accent: '#44aaff', spd: 70, pwr: 75, gradient: ['#10203a', '#050a15'], label: 'AGE: 16', file: 'darko_idle.png', 
+      desc: 'A certified tactical supergenius and die-hard Guns N\' Roses fan. Delivers high melee damage with a baseball bat and features a killer "Sweet Child" sonic special attack.' 
+    }
   ];
 
   const scene = new THREE.Scene();
@@ -109,115 +119,4 @@ import * as THREE from 'https://cdn.skypack.dev/three@0.128.0';
   const cardMeshes = [];
   const RADIUS = 3.8; const ANGLE_STEP = (Math.PI * 2) / cardsData.length;
   cardsData.forEach((card, i) => {
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(4, 6, 0.2), [new THREE.MeshStandardMaterial({color: 0x1a0a05}), new THREE.MeshStandardMaterial({color: 0x1a0a05}), new THREE.MeshStandardMaterial({color: 0x1a0a05}), new THREE.MeshStandardMaterial({color: 0x1a0a05}), new THREE.MeshStandardMaterial({transparent: true, emissive: 0x111111}), new THREE.MeshStandardMaterial({color: 0x000000})]);
-    mesh.userData = { index: i }; scene.add(mesh); cardMeshes.push(mesh);
-    mesh.material[4].map = createCardTexture(card);
-    const img = new Image(); img.crossOrigin = "anonymous";
-    img.onload = () => { mesh.material[4].map = createCardTexture(card, img); mesh.material[4].needsUpdate = true; };
-    img.src = RAW_URL + card.file;
-  });
-
-  scene.add(new THREE.AmbientLight(theme.ambient, 0.6));
-  const spotLight = new THREE.PointLight(theme.point, 5, 25);
-  spotLight.position.set(0, 5, 8);
-  scene.add(spotLight);
-
-  // --- INTERACTION & DRIFT TIMER ---
-  let currentAngle = 0, targetAngle = 0, isDragging = false, lastX = 0, totalMove = 0;
-  const raycaster = new THREE.Raycaster(); const mouse = new THREE.Vector2();
-
-  // NEW: Variables to handle the 3-second drift pause
-  let isDrifting = true;
-  let driftTimeout = null;
-
-  function resetDriftTimer() {
-    isDrifting = false; // Stop auto-rotation
-    if (driftTimeout) clearTimeout(driftTimeout); // Clear existing timer
-    
-    // Start a new 3-second countdown before resuming drift
-    driftTimeout = setTimeout(() => {
-        isDrifting = true;
-    }, 3000); 
-  }
-
-  window.addEventListener('mousedown', e => { 
-    if (inputLocked) return; 
-    isDragging = true; lastX = e.clientX; totalMove = 0; 
-    isDrifting = false; // Stop drifting immediately when dragging
-  });
-  
-  window.addEventListener('mousemove', e => {
-    if (inputLocked || !isDragging) return;
-    targetAngle += (e.clientX - lastX) * 0.01; totalMove += Math.abs(e.clientX - lastX); lastX = e.clientX;
-    mouse.x = (e.clientX / window.innerWidth) * 2 - 1; mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
-    raycaster.setFromCamera(mouse, camera); document.body.style.cursor = raycaster.intersectObjects(cardMeshes).length > 0 ? 'pointer' : 'default';
-  });
-  
-  window.addEventListener('mouseup', e => {
-    if (inputLocked) return;
-    isDragging = false; 
-    targetAngle = Math.round(targetAngle / ANGLE_STEP) * ANGLE_STEP;
-    resetDriftTimer(); // Start the 3-second pause when you let go
-
-    if (totalMove < 8) {
-      const hits = raycaster.intersectObjects(cardMeshes);
-      if (hits.length > 0) {
-        const d = cardsData[hits[0].object.userData.index];
-        const el = document.getElementById('expanded-card');
-        el.querySelector('.card-title').textContent = d.title; el.querySelector('.card-desc').textContent = d.desc;
-        el.querySelector('#stat-spd').textContent = d.spd; el.querySelector('#stat-pwr').textContent = d.pwr;
-        el.querySelector('.card-content').style.borderColor = d.accent; el.style.display = 'flex';
-        setTimeout(() => el.classList.add('active'), 10);
-      }
-    }
-  });
-
-  // Keyboard Navigation with Drift Pause
-  window.addEventListener('keydown', (e) => {
-    if (inputLocked) return;
-
-    const popup = document.getElementById('expanded-card');
-    if (popup && popup.classList.contains('active')) return;
-
-    if (e.key === 'ArrowLeft' || e.key.toLowerCase() === 'a') {
-        targetAngle = Math.round(targetAngle / ANGLE_STEP) * ANGLE_STEP + ANGLE_STEP;
-        resetDriftTimer(); // Pause drift for 3 seconds
-    }
-    else if (e.key === 'ArrowRight' || e.key.toLowerCase() === 'd') {
-        targetAngle = Math.round(targetAngle / ANGLE_STEP) * ANGLE_STEP - ANGLE_STEP;
-        resetDriftTimer(); // Pause drift for 3 seconds
-    }
-  });
-
-  document.addEventListener('click', (e) => {
-    if (e.target.classList.contains('close-btn') || e.target.id === 'expanded-card') {
-      const el = document.getElementById('expanded-card'); el.classList.remove('active');
-      setTimeout(() => { el.style.display = 'none'; }, 300);
-    }
-  });
-
-  function animate(time) {
-    requestAnimationFrame(animate);
-    
-    // UPDATED: Only drift if not dragging AND the drift timer has finished
-    if(!isDragging && isDrifting) targetAngle += 0.002; 
-    
-    currentAngle += (targetAngle - currentAngle) * 0.1;
-    
-    cardMeshes.forEach((m, i) => {
-      const theta = currentAngle + (i * ANGLE_STEP);
-      m.position.x = Math.sin(theta) * RADIUS; m.position.z = Math.cos(theta) * RADIUS - RADIUS; m.rotation.y = theta;
-    });
-
-    const pos = ashSystem.geometry.attributes.position.array;
-    for(let i = 1; i < pos.length; i += 3) {
-      pos[i] += 0.015;
-      if (pos[i] > 10) pos[i] = -10;
-    }
-    ashSystem.geometry.attributes.position.needsUpdate = true;
-
-    titleMesh.material.opacity = 0.2 + Math.abs(Math.sin(time * 0.001)) * 0.15;
-    renderer.render(scene, camera);
-  }
-  animate();
-})();
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(4, 6, 0.2), [new THREE.MeshStandardMaterial
