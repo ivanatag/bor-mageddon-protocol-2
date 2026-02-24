@@ -3,7 +3,6 @@
 ========================================= */
 @import url('https://fonts.googleapis.com/css2?family=Metal+Mania&family=Space+Mono:wght@400;700&display=swap');
 
-/* Force-load Metal Mania so the 3D Canvas picks it up immediately */
 body::after {
     content: "BORMAGEDDON";
     font-family: "Metal Mania";
@@ -23,10 +22,10 @@ body, html {
 canvas { display: block; }
 
 /* =========================================
-   2. GLOBAL GAME TYPOGRAPHY (Utility Classes)
+   2. GLOBAL GAME TYPOGRAPHY
 ========================================= */
 
-/* METAL MANIA: Gig Headlines & HUD Character Names */
+/* METAL MANIA: Main Titles & HUD Names */
 .font-metal, 
 .gig-headline, 
 .hud-name,
@@ -40,25 +39,29 @@ canvas { display: block; }
     margin: 0;
 }
 
-/* SPACE MONO (BOLD): UI Headers, Labels, Stats */
+/* SPACE MONO (BOLD): UI Headers & Labels */
 .font-mono-title,
 .ui-header,
 .stat-label,
 .system-tag,
-#music-toggle,
-.select-btn {
+#music-toggle {
     font-family: 'Space Mono', monospace;
     font-weight: 700;
-    color: #ff3333;
+    color: #ff3333; /* Red text for UI labels */
     text-transform: uppercase;
-    letter-spacing: -1px;
 }
 
-/* SPACE MONO (REGULAR): Body Text, Dialogue, Descriptions */
-.font-mono-body,
-.card-desc,
-.dialogue-text,
-p {
+/* THE BUTTON FIX: High contrast text for red buttons */
+.select-btn, #initialize-btn {
+    font-family: 'Space Mono', monospace;
+    font-weight: 700;
+    color: #000000 !important; /* FORCED BLACK TEXT FOR VISIBILITY */
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+/* SPACE MONO (REGULAR): Body Text */
+.card-desc, p {
     font-family: 'Space Mono', monospace;
     font-weight: 400;
     color: #cccccc;
@@ -66,7 +69,7 @@ p {
 }
 
 /* =========================================
-   3. CRT VISUAL OVERLAYS
+   3. VISUAL OVERLAYS
 ========================================= */
 .scanlines {
     position: fixed; top: 0; left: 0; width: 100%; height: 100%;
@@ -83,7 +86,7 @@ p {
 }
 
 /* =========================================
-   4. INTERACTIVE OVERLAYS (Start, Boot, Header)
+   4. START & BOOT SCREENS
 ========================================= */
 #start-overlay {
     position: fixed; top: 0; left: 0; width: 100%; height: 100%;
@@ -97,9 +100,8 @@ p {
 }
 
 #initialize-btn {
-    background: #ff3333; color: #000; border: none; padding: 25px 50px;
-    font-weight: bold; font-family: 'Space Mono', monospace; cursor: pointer;
-    box-shadow: 8px 8px 0px #660000; font-size: 20px; text-transform: uppercase;
+    background: #ff3333; border: none; padding: 25px 50px;
+    cursor: pointer; box-shadow: 8px 8px 0px #660000; font-size: 20px;
     margin-top: 20px;
 }
 #initialize-btn:hover { background: #fff; transform: translate(-2px, -2px); box-shadow: 10px 10px 0px #999; }
@@ -115,18 +117,17 @@ p {
 #hint { font-size: 11px; color: #ff3333; text-shadow: 0 0 8px #ff3333; }
 
 #music-toggle {
-    background: transparent; border: 1px solid #ff3333; color: #ff3333;
+    background: transparent; border: 1px solid #ff3333; 
     padding: 6px 15px; font-size: 11px; cursor: pointer;
 }
 
 #boot-screen {
     position: fixed; top: 0; left: 0; width: 100%; height: 100%;
     background: #000; z-index: 2000; padding: 60px; color: #00ff00;
-    font-size: 16px; transition: opacity 0.6s ease;
 }
 
 /* =========================================
-   5. CHARACTER ARCHIVE (Expanded Card)
+   5. CHARACTER ARCHIVE POPUP
 ========================================= */
 #expanded-card {
     position: fixed; top: 0; left: 0; width: 100%; height: 100%;
@@ -149,11 +150,15 @@ p {
     text-shadow: 5px 5px 0px #ff3333; 
 }
 
-.card-desc { margin-bottom: 30px; border-left: 3px solid #ff3333; padding-left: 18px; }
-
 .close-btn { 
     position: absolute; top: 15px; right: 15px; 
-    background: #ff3333; border: none; font-weight: bold; cursor: pointer; padding: 8px 14px;
+    background: #ff3333; color: #000; border: none; 
+    font-weight: bold; cursor: pointer; padding: 8px 14px;
 }
 
-.select-btn { width: 100%; padding: 22px; background: #ff3333; cursor: pointer; }
+.select-btn { 
+    width: 100%; padding: 22px; background: #ff3333; 
+    border: none; cursor: pointer; font-size: 18px;
+    box-shadow: 6px 6px 0px #660000;
+}
+.select-btn:hover { background: #fff; }
