@@ -1,7 +1,9 @@
-/* 1. FONT IMPORTS & PRELOADING */
+/* =========================================
+   1. FONT IMPORTS & PRELOADING
+========================================= */
 @import url('https://fonts.googleapis.com/css2?family=Metal+Mania&family=Space+Mono:wght@400;700&display=swap');
 
-/* Force-load Metal Mania so the 3D Title appears correctly on first render */
+/* Force-load Metal Mania so the 3D Canvas picks it up immediately */
 body::after {
     content: "BORMAGEDDON";
     font-family: "Metal Mania";
@@ -15,12 +17,57 @@ body, html {
     overflow: hidden;
     background: #050404;
     font-family: 'Space Mono', monospace;
-    color: #ff3333;
+    color: #cccccc;
 }
 
 canvas { display: block; }
 
-/* 2. CRT VISUAL OVERLAYS (STILL ON TOP) */
+/* =========================================
+   2. GLOBAL GAME TYPOGRAPHY (Utility Classes)
+========================================= */
+
+/* METAL MANIA: Gig Headlines & HUD Character Names */
+.font-metal, 
+.gig-headline, 
+.hud-name,
+.start-box h1 {
+    font-family: 'Metal Mania', cursive;
+    font-weight: 900;
+    color: #ffffff;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    text-shadow: 4px 4px 0px #ff3333;
+    margin: 0;
+}
+
+/* SPACE MONO (BOLD): UI Headers, Labels, Stats */
+.font-mono-title,
+.ui-header,
+.stat-label,
+.system-tag,
+#music-toggle,
+.select-btn {
+    font-family: 'Space Mono', monospace;
+    font-weight: 700;
+    color: #ff3333;
+    text-transform: uppercase;
+    letter-spacing: -1px;
+}
+
+/* SPACE MONO (REGULAR): Body Text, Dialogue, Descriptions */
+.font-mono-body,
+.card-desc,
+.dialogue-text,
+p {
+    font-family: 'Space Mono', monospace;
+    font-weight: 400;
+    color: #cccccc;
+    line-height: 1.6;
+}
+
+/* =========================================
+   3. CRT VISUAL OVERLAYS
+========================================= */
 .scanlines {
     position: fixed; top: 0; left: 0; width: 100%; height: 100%;
     background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), 
@@ -35,7 +82,9 @@ canvas { display: block; }
     pointer-events: none; z-index: 1501;
 }
 
-/* 3. START OVERLAY (AUDIO UNLOCK) */
+/* =========================================
+   4. INTERACTIVE OVERLAYS (Start, Boot, Header)
+========================================= */
 #start-overlay {
     position: fixed; top: 0; left: 0; width: 100%; height: 100%;
     background: #000; z-index: 3000;
@@ -47,17 +96,14 @@ canvas { display: block; }
     background: #1a0a05; box-shadow: 0 0 50px rgba(255, 51, 51, 0.2);
 }
 
-.start-box h1 { font-family: 'Metal Mania', cursive; font-size: 56px; margin-bottom: 30px; letter-spacing: 2px; }
-
 #initialize-btn {
     background: #ff3333; color: #000; border: none; padding: 25px 50px;
     font-weight: bold; font-family: 'Space Mono', monospace; cursor: pointer;
     box-shadow: 8px 8px 0px #660000; font-size: 20px; text-transform: uppercase;
+    margin-top: 20px;
 }
 #initialize-btn:hover { background: #fff; transform: translate(-2px, -2px); box-shadow: 10px 10px 0px #999; }
-#initialize-btn:active { transform: translate(4px, 4px); box-shadow: 2px 2px 0px #000; }
 
-/* 4. TERMINAL HEADER & NAVIGATION */
 #terminal-header {
     position: fixed; top: 0; left: 0; width: 100%;
     padding: 20px 30px; display: flex; justify-content: space-between;
@@ -66,26 +112,22 @@ canvas { display: block; }
     border-bottom: 1px solid rgba(255, 51, 51, 0.2);
 }
 
-#hint {
-    font-size: 11px; letter-spacing: 1.5px; color: #ff3333;
-    text-shadow: 0 0 8px #ff3333; opacity: 0.9;
-}
+#hint { font-size: 11px; color: #ff3333; text-shadow: 0 0 8px #ff3333; }
 
 #music-toggle {
     background: transparent; border: 1px solid #ff3333; color: #ff3333;
-    padding: 6px 15px; font-family: 'Space Mono', monospace;
-    font-size: 11px; cursor: pointer; transition: 0.2s;
+    padding: 6px 15px; font-size: 11px; cursor: pointer;
 }
-#music-toggle:hover { background: #ff3333; color: #000; }
 
-/* 5. BOOT SCREEN (TOXIC TEXT) */
 #boot-screen {
     position: fixed; top: 0; left: 0; width: 100%; height: 100%;
     background: #000; z-index: 2000; padding: 60px; color: #00ff00;
-    font-size: 16px; line-height: 1.6; transition: opacity 0.6s ease;
+    font-size: 16px; transition: opacity 0.6s ease;
 }
 
-/* 6. CHUNKY ARCHIVE POPUP */
+/* =========================================
+   5. CHARACTER ARCHIVE (Expanded Card)
+========================================= */
 #expanded-card {
     position: fixed; top: 0; left: 0; width: 100%; height: 100%;
     background: rgba(0, 0, 0, 0.95); display: none; 
@@ -98,31 +140,20 @@ canvas { display: block; }
 .card-content {
     width: 440px; padding: 45px; background: #1a0a05;
     border: 8px solid #331111; outline: 4px solid #ff3333;
-    box-shadow: 20px 20px 0px #000, 0 0 40px rgba(255, 51, 51, 0.2);
-    position: relative; box-sizing: border-box;
+    box-shadow: 20px 20px 0px #000; position: relative;
 }
 
 .card-title { 
-    font-family: 'Space Mono', monospace; /* Space Mono per request */
     font-size: 54px; color: #fff; margin: 10px 0; 
     text-transform: uppercase; letter-spacing: -2px;
     text-shadow: 5px 5px 0px #ff3333; 
 }
 
-.card-desc {
-    color: #ccc; font-size: 14px; line-height: 1.6;
-    margin-bottom: 30px; border-left: 3px solid #ff3333; padding-left: 18px;
-}
+.card-desc { margin-bottom: 30px; border-left: 3px solid #ff3333; padding-left: 18px; }
 
 .close-btn { 
     position: absolute; top: 15px; right: 15px; 
-    background: #ff3333; color: #000; border: none; 
-    font-weight: bold; cursor: pointer; padding: 8px 14px;
+    background: #ff3333; border: none; font-weight: bold; cursor: pointer; padding: 8px 14px;
 }
 
-.select-btn { 
-    width: 100%; padding: 22px; background: #ff3333; 
-    color: #000; border: none; font-weight: bold; 
-    font-size: 18px; cursor: pointer; box-shadow: 6px 6px 0px #660000;
-}
-.select-btn:hover { background: #fff; transform: translate(-2px, -2px); box-shadow: 8px 8px 0px #999; }
+.select-btn { width: 100%; padding: 22px; background: #ff3333; cursor: pointer; }
