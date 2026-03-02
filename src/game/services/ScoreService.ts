@@ -1,3 +1,5 @@
+import { supabase } from '@/integrations/supabase/client';
+
 export class ScoreService {
   private static instance: ScoreService;
   private currentScore: number = 0;
@@ -42,6 +44,50 @@ export class ScoreService {
       return `${(score / 1000).toFixed(1)}K`;
     }
     return score.toString();
+  }
+
+  /**
+   * Submit current score to the Supabase leaderboard table.
+   * Uses int8 (bigint) column to safely handle 1993 hyperinflation-scale values.
+   */
+  async submitScore(username: string, eraRecorded?: string): Promise<boolean> {
+    try {
+      const { error } = await supabase
+        .from('leaderboard')
+        .insert({
+          username,
+          score: this.currentScore,
+          era_recorded: eraRecorded ?? null,
+        });
+
+      if (error) {
+        console.error('Failed to submit score:', error);
+        return false;
+      }
+      return true;
+    } catch (err) {
+      console.error('Score submission exception:', err);
+      return false;
+    }
+  }
+
+  /**
+   * Fetch top N scores from the leaderboard.
+   */
+  async fetchTopScores(limit: number = 10): Promise<{ username: string; score: number; era_recorded: string | null }[]> {
+    try {
+      const { data, error } = await supabase
+        .from('leaderboard')
+        .select('username, score, era_recorded')
+        .order('score', { ascending: false })
+        .limit(limit);
+
+      if (error) throw error;
+      return data ?? [];
+    } catch (err) {
+      console.error('Failed to fetch scores:', err);
+      return [];
+    }
   }
 }
 
