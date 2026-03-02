@@ -132,6 +132,52 @@ export class SlobodanCEO extends Phaser.GameObjects.Container {
   }
 
   /**
+   * Forward Jump Slam – leaps toward player and lands with AoE shockwave.
+   */
+  forwardJumpSlam(playerX: number, playerY: number): void {
+    if (this.isAttacking) return;
+    this.isAttacking = true;
+
+    const startX = this.x;
+    const startY = this.y;
+    const midX = (startX + playerX) / 2;
+
+    // Arc jump toward player
+    this.scene.tweens.add({
+      targets: this,
+      x: playerX,
+      duration: 600,
+      ease: 'Quad.easeOut',
+    });
+
+    // Vertical arc (up then down)
+    this.scene.tweens.add({
+      targets: this,
+      y: startY - 120,
+      duration: 300,
+      ease: 'Quad.easeOut',
+      yoyo: true,
+      onComplete: () => {
+        // Landing shockwave
+        const shockwave = this.scene.add.circle(this.x, this.y + 60, 20, 0x4a7a2e, 0.5);
+        shockwave.setStrokeStyle(3, 0x228B22);
+        shockwave.setDepth(999);
+
+        this.scene.tweens.add({
+          targets: shockwave,
+          radius: 150,
+          alpha: 0,
+          duration: 400,
+          onComplete: () => shockwave.destroy(),
+        });
+
+        this.scene.cameras.main.shake(300, 0.02);
+        this.isAttacking = false;
+      },
+    });
+  }
+
+  /**
    * Hyper-Inflation Storm: rains dinar projectiles from above.
    */
   private hyperInflationStorm(targetX: number): void {

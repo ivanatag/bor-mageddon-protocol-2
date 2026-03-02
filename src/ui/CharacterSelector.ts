@@ -256,3 +256,83 @@ export class CharacterSelector {
         window.addEventListener('mouseup', e => {
             if (!this.isDragging) return;
             this.isDragging = false;
+            document.body.style.cursor = 'default';
+
+            // Snap to nearest card
+            const steps = Math.round(this.targetAngle / this.angleStep);
+            this.targetAngle = steps * this.angleStep;
+        });
+
+        // Click to select card
+        dom.addEventListener('click', e => {
+            mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+            raycaster.setFromCamera(mouse, this.camera);
+            const hits = raycaster.intersectObjects(this.cardMeshes);
+            if (hits.length > 0) {
+                const card = this.characters[hits[0].object.userData.index];
+                this.selectedId = card.id;
+                this.showExpandedCard(card);
+            }
+        });
+
+        window.addEventListener('resize', () => {
+            this.camera.aspect = window.innerWidth / window.innerHeight;
+            this.camera.updateProjectionMatrix();
+            this.renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    }
+
+    private showExpandedCard(card: CharacterCard): void {
+        const titleEl = this.overlay.querySelector('.card-title') as HTMLDivElement;
+        const descEl = this.overlay.querySelector('.card-desc') as HTMLDivElement;
+        titleEl.textContent = card.title;
+        descEl.textContent = card.desc;
+        this.overlay.style.display = 'flex';
+        requestAnimationFrame(() => this.overlay.classList.add('active'));
+    }
+
+    private deployCharacter(): void {
+        this.overlay.classList.remove('active');
+        this.overlay.style.display = 'none';
+
+        // Bridge to Phaser MenuScene
+        if (window.phaserGame) {
+            const menu = window.phaserGame.scene.getScene('MenuScene');
+            if (menu) {
+                menu.events.emit('character-selected', this.selectedId);
+            }
+        }
+
+        this.destroy();
+    }
+
+    private animate(): void {
+        this.animationId = requestAnimationFrame(this.animate);
+
+        // Ease toward target
+        this.currentAngle += (this.targetAngle - this.currentAngle) * 0.08;
+
+        // Position cards in carousel
+        this.cardMeshes.forEach((mesh, i) => {
+            const angle = this.currentAngle + i * this.angleStep;
+            mesh.position.x = Math.sin(angle) * this.RADIUS;
+            mesh.position.z = Math.cos(angle) * this.RADIUS - this.RADIUS;
+            mesh.rotation.y = -angle;
+            mesh.position.y = 0;
+        });
+
+        // Rotate ash
+        const ash = this.scene.getObjectByName('ash');
+        if (ash) ash.rotation.y += 0.001;
+
+        this.renderer.render(this.scene, this.camera);
+    }
+
+    destroy(): void {
+        cancelAnimationFrame(this.animationId);
+        this.renderer.dispose();
+        this.renderer.domElement.remove();
+        this.container?.remove();
+    }
+}
