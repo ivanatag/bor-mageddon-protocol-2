@@ -51,10 +51,6 @@ export class Weapon {
     /**
      * Attempts to fire the weapon.
      * Returns true if successful, false if empty or on cooldown.
-     * * @param x The player's current X position
-     * @param y The player's current Y position
-     * @param facingRight Boolean indicating player direction
-     * @param isPangMode If true, shoots vertically up instead of horizontally
      */
     public fire(x: number, y: number, facingRight: boolean, isPangMode: boolean = false): boolean {
         if (!this.canFire || this.currentAmmo <= 0) {
@@ -72,7 +68,6 @@ export class Weapon {
 
         if (isPangMode) {
             // Shooting straight up
-            // You may need to tweak these offsets based on the exact Pang sprite we generated!
             spawnX = x + (10 * dirMult); 
             spawnY = y - 180; 
         } else {
@@ -84,12 +79,11 @@ export class Weapon {
         this.spawnMuzzleFlash(spawnX, spawnY, facingRight, isPangMode);
 
         // Tell MainLevel.ts to physically create the bullet
+        // FIXED: Direction is now a pure number to match Projectile.ts requirements
         this.scene.events.emit('spawn-projectile', {
             x: spawnX,
             y: spawnY,
-            direction: isPangMode ? { x: 0, y: -1 } : { x: dirMult, y: 0 },
-            speed: this.config.projectileSpeed,
-            damage: this.config.damage,
+            direction: dirMult, 
             type: 'BULLET'
         });
 
@@ -113,7 +107,6 @@ export class Weapon {
         }
 
         // Assuming you have 'muzzle_flash' loaded in BootScene
-        // If not, you can replace this with a Phaser primitive (like the ellipse in the 2nd snippet)
         this.muzzleFlash = this.scene.add.sprite(x, y, 'muzzle_flash');
         
         if (this.muzzleFlash.texture.key !== '__MISSING') {
