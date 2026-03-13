@@ -1,97 +1,118 @@
-import React, { useState } from 'react';
-import { Switch } from '@/components/ui/switch';
-import { Slider } from '@/components/ui/slider';
-import { X } from 'lucide-react';
+import React from 'react';
 
+// ==========================================
+// 1. PERMANENT CONTROLS HUD (Corner Overlay)
+// ==========================================
+export const ControlsHUD: React.FC = () => {
+  return (
+    <div className="absolute bottom-4 left-4 z-40 bg-black/60 border border-[#b87333] p-3 rounded-sm pointer-events-none select-none backdrop-blur-sm">
+      <h3 className="text-[#39ff14] font-mono text-xs mb-2 uppercase tracking-widest border-b border-zinc-700 pb-1">
+        [SYS_CONTROLS]
+      </h3>
+      <ul className="text-zinc-300 font-mono text-[10px] space-y-1">
+        <li><span className="text-orange-500 font-bold">ARROWS:</span> MOVE</li>
+        <li><span className="text-orange-500 font-bold">SPACE:</span> JUMP</li>
+        <li><span className="text-orange-500 font-bold">A:</span> PUNCH / MELEE / PICKUP</li>
+        <li><span className="text-orange-500 font-bold">S:</span> KICK</li>
+        <li><span className="text-orange-500 font-bold">D:</span> SHOOT</li>
+        <li><span className="text-orange-500 font-bold">Q:</span> SPECIAL ABILITY</li>
+        <li><span className="text-orange-500 font-bold">E:</span> FINISHER</li>
+      </ul>
+    </div>
+  );
+};
+
+
+// ==========================================
+// 2. SETTINGS MODAL
+// ==========================================
 interface SettingsMenuProps {
   isOpen: boolean;
   onClose: () => void;
   crtEnabled: boolean;
   onCrtToggle: (enabled: boolean) => void;
-  goreEnabled: boolean;
-  onGoreToggle: (enabled: boolean) => void;
   volume: number;
   onVolumeChange: (volume: number) => void;
 }
 
-const SettingsMenu: React.FC<SettingsMenuProps> = ({
+export const SettingsMenu: React.FC<SettingsMenuProps> = ({
   isOpen,
   onClose,
   crtEnabled,
   onCrtToggle,
-  goreEnabled,
-  onGoreToggle,
   volume,
   onVolumeChange
 }) => {
   if (!isOpen) return null;
 
+  // Sends volume data directly to the Phaser engine if it is running
+  const handleVolumeChange = (newVolume: number) => {
+    onVolumeChange(newVolume);
+    if (window.phaserGame) {
+      window.phaserGame.sound.volume = newVolume;
+    }
+  };
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
-      <div className="hud-panel w-full max-w-md mx-4">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="font-pixel text-xl text-primary">SETTINGS</h2>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-muted rounded transition-colors"
-          >
-            <X className="w-6 h-6 text-foreground" />
-          </button>
-        </div>
+    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 font-mono backdrop-blur-sm">
+      <div className="bg-[#121212] border-2 border-[#b87333] p-8 w-96 shadow-[0_0_30px_rgba(184,115,51,0.4)] relative">
+        
+        {/* Close Button */}
+        <button 
+          onClick={onClose}
+          className="absolute top-3 right-4 text-zinc-500 hover:text-red-500 font-bold text-xl cursor-pointer"
+        >
+          X
+        </button>
 
-        <div className="space-y-6">
-          {/* CRT Filter */}
+        <h2 className="text-[#39ff14] text-2xl mb-6 uppercase tracking-widest border-b-2 border-[#b87333] pb-2">
+          KONFIGURACIJA
+        </h2>
+
+        <div className="space-y-8">
+          
+          {/* CRT Filter Toggle */}
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="font-pixel text-sm text-foreground">CRT FILTER</h3>
-              <p className="font-retro text-muted-foreground text-sm">
-                Enable scanline overlay effect
-              </p>
+              <h3 className="text-[#b87333] block uppercase text-sm font-bold">CRT FILTER</h3>
+              <p className="text-zinc-500 text-xs">Scanline & Phosphor overlay</p>
             </div>
-            <Switch
-              checked={crtEnabled}
-              onCheckedChange={onCrtToggle}
+            
+            {/* Custom Native Toggle Switch */}
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input 
+                type="checkbox" 
+                className="sr-only peer" 
+                checked={crtEnabled}
+                onChange={(e) => onCrtToggle(e.target.checked)}
+              />
+              <div className="w-11 h-6 bg-zinc-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#39ff14]"></div>
+            </label>
+          </div>
+
+          {/* Master Volume Slider */}
+          <div>
+            <div className="flex justify-between mb-2">
+              <label className="text-[#b87333] uppercase text-sm font-bold">GLAVNI AUDIO</label>
+              <span className="text-[#39ff14] text-sm">{Math.round(volume * 100)}%</span>
+            </div>
+            <input 
+              type="range" min="0" max="1" step="0.05" 
+              value={volume}
+              onChange={(e) => handleVolumeChange(parseFloat(e.target.value))}
+              className="w-full accent-[#b87333] h-2 bg-zinc-800 rounded-lg appearance-none cursor-pointer"
             />
           </div>
 
-          {/* Gore Effects */}
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="font-pixel text-sm text-foreground">GORE EFFECTS</h3>
-              <p className="font-retro text-muted-foreground text-sm">
-                Blood and particle effects
-              </p>
-            </div>
-            <Switch
-              checked={goreEnabled}
-              onCheckedChange={onGoreToggle}
-            />
-          </div>
-
-          {/* Volume */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="font-pixel text-sm text-foreground">VOLUME</h3>
-              <span className="font-retro text-secondary text-lg">{Math.round(volume * 100)}%</span>
-            </div>
-            <Slider
-              value={[volume * 100]}
-              onValueChange={(values) => onVolumeChange(values[0] / 100)}
-              max={100}
-              step={5}
-              className="w-full"
-            />
-          </div>
         </div>
 
-        <div className="mt-8 pt-4 border-t border-border">
-          <p className="font-retro text-muted-foreground text-center text-sm">
-            BOR-MAGEDDON PROTOCOL-2 v0.1.0
-          </p>
-        </div>
+        <button 
+          onClick={onClose}
+          className="mt-10 w-full bg-[#b87333] hover:bg-[#39ff14] text-black font-bold py-3 px-4 transition-colors uppercase border border-orange-500"
+        >
+          POTVRDI I NAZAD (SAVE)
+        </button>
       </div>
     </div>
   );
 };
-
-export default SettingsMenu;
