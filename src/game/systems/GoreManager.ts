@@ -1,127 +1,76 @@
 import Phaser from 'phaser';
 
-export type GoreType = 'CLASSIC' | 'BUREAUCRATIC' | 'INDUSTRIAL';
-
-export interface GoreParticle {
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-  size: number;
-  color: number;
-  life: number;
-  maxLife: number;
-  shape?: 'circle' | 'rect'; // rect for shredded paper
-}
-
-const GORE_PALETTES: Record<GoreType, number[]> = {
-  CLASSIC: [0xcc0000, 0x990000, 0x660000, 0xff0000, 0x800000],
-  BUREAUCRATIC: [0xf5f5dc, 0xe8e0c8, 0xccccaa, 0xddddbb, 0xaaaaaa],
-  INDUSTRIAL: [0x1a1a1a, 0x2d2d2d, 0x0a0a0a, 0x333333, 0x111111],
-};
-
+/**
+ * GoreManager: Manages particle effects for combat feedback.
+ * Handles organic blood splatters and industrial debris.
+ */
 export class GoreManager {
-  private scene: Phaser.Scene;
-  private particles: GoreParticle[] = [];
-  private graphics: Phaser.GameObjects.Graphics;
-  private maxParticles: number = 200;
-  private enabled: boolean = true;
+    private scene: Phaser.Scene;
+    private bloodParticles: Phaser.GameObjects.Particles.ParticleEmitter;
+    private debrisParticles: Phaser.GameObjects.Particles.ParticleEmitter;
 
-  constructor(scene: Phaser.Scene) {
-    this.scene = scene;
-    this.graphics = scene.add.graphics();
-    this.graphics.setDepth(100);
-  }
+    constructor(scene: Phaser.Scene) {
+        this.scene = scene;
 
-  setEnabled(enabled: boolean): void {
-    this.enabled = enabled;
-    if (!enabled) this.clear();
-  }
+        // 1. Organic Blood Splatter (Red/Dark Red)
+        // Uses a simple 16-bit square or circle pixel texture
+        this.bloodParticles = this.scene.add.particles(0, 0, 'pixel_particle', {
+            color: [0x8b0000, 0xff0000, 0x5e0000],
+            speed: { min: 100, max: 250 },
+            scale: { start: 1, end: 0 },
+            lifespan: 400,
+            gravityY: 600,
+            quantity: 0, // Manual burst only
+            blendMode: 'NORMAL'
+        });
 
-  /**
-   * Universal gore emitter. Type determines palette and particle shape.
-   * CLASSIC = red blood circles
-   * BUREAUCRATIC = shredded tax form rectangles (beige/white)
-   * INDUSTRIAL = black sludge circles
-   */
-  spawnGore(x: number, y: number, type: GoreType, intensity: number = 1): void {
-    if (!this.enabled) return;
+        // 2. Industrial Debris/Sparks (Yellow/Orange/Grey)
+        this.debrisParticles = this.scene.add.particles(0, 0, 'pixel_particle', {
+            color: [0xffa500, 0xffff00, 0x808080],
+            speed: { min: 150, max: 300 },
+            scale: { start: 1, end: 0 },
+            lifespan: 300,
+            gravityY: 400,
+            quantity: 0,
+            blendMode: 'ADD'
+        });
 
-    const particleCount = Math.floor(15 * intensity);
-    const colors = GORE_PALETTES[type];
-    const shape: 'circle' | 'rect' = type === 'BUREAUCRATIC' ? 'rect' : 'circle';
-
-    for (let i = 0; i < particleCount; i++) {
-      if (this.particles.length >= this.maxParticles) {
-        this.particles.shift();
-      }
-
-      const angle = Math.random() * Math.PI * 2;
-      const speed = 50 + Math.random() * 150 * intensity;
-
-      this.particles.push({
-        x,
-        y,
-        vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed - 100,
-        size: type === 'BUREAUCRATIC' ? 3 + Math.random() * 6 : 2 + Math.random() * 4,
-        color: colors[Math.floor(Math.random() * colors.length)],
-        life: 1,
-        maxLife: 0.5 + Math.random() * 1,
-        shape,
-      });
+        // Global Event Listeners for easy triggering
+        this.scene.events.on('spawn-blood-splatter', this.spawnBlood, this);
+        this.scene.events.on('spawn-industrial-debris', this.spawnDebris, this);
     }
-  }
 
-  /** Convenience aliases */
-  spawnBloodSplatter(x: number, y: number, intensity: number = 1): void {
-    this.spawnGore(x, y, 'CLASSIC', intensity);
-  }
-
-  spawnDinarExplosion(x: number, y: number): void {
-    this.spawnGore(x, y, 'BUREAUCRATIC', 1.5);
-  }
-
-  spawnSludgeBurst(x: number, y: number, intensity: number = 1): void {
-    this.spawnGore(x, y, 'INDUSTRIAL', intensity);
-  }
-
-  update(delta: number): void {
-    const dt = delta / 1000;
-    this.graphics.clear();
-
-    for (let i = this.particles.length - 1; i >= 0; i--) {
-      const p = this.particles[i];
-
-      p.vy += 400 * dt;
-      p.x += p.vx * dt;
-      p.y += p.vy * dt;
-      p.life -= dt / p.maxLife;
-
-      if (p.life <= 0) {
-        this.particles.splice(i, 1);
-        continue;
-      }
-
-      const alpha = Math.max(0, p.life);
-      this.graphics.fillStyle(p.color, alpha);
-
-      if (p.shape === 'rect') {
-        // Shredded paper rectangles (BUREAUCRATIC)
-        this.graphics.fillRect(p.x - p.size / 2, p.y - p.size / 4, p.size * p.life, p.size * 0.4 * p.life);
-      } else {
-        this.graphics.fillCircle(p.x, p.y, p.size * p.life);
-      }
+    /**
+     * Spawns a burst of blood at the impact location.
+     * Triggered by bullets hitting organic enemies.
+     */
+    public spawnBlood(data: { x: number, y: number }) {
+        this.bloodParticles.emitParticleAt(data.x, data.y, Phaser.Math.Between(8, 15));
+        
+        // Brief screen shake for "weighty" hits
+        this.scene.cameras.main.shake(100, 0.005);
     }
-  }
 
-  clear(): void {
-    this.particles = [];
-    this.graphics.clear();
-  }
+    /**
+     * Spawns sparks and dust.
+     * Triggered by melee hits on armored enemies (MUP) or objects breaking.
+     */
+    public spawnDebris(data: { x: number, y: number }) {
+        this.debrisParticles.emitParticleAt(data.x, data.y, Phaser.Math.Between(10, 20));
+    }
 
-  destroy(): void {
-    this.clear();
-    this.graphics.destroy();
-  }
+    /**
+     * Specialized "Industrial Dust" for the road belt movement.
+     */
+    public spawnDustCloud(x: number, y: number) {
+        this.scene.add.particles(x, y, 'pixel_particle', {
+            color: 0x444444,
+            alpha: { start: 0.5, end: 0 },
+            scale: { start: 2, end: 4 },
+            speed: 20,
+            lifespan: 800,
+            frequency: -1,
+            maxParticles: 5
+        }).explode();
+    }
 }
