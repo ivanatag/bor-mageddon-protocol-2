@@ -1,143 +1,178 @@
 import Phaser from 'phaser';
-import { Enemy } from '../Enemy';
+import { Player } from '../Player';
 
 /**
- * MUP (Milicija) Class: The tactical blocker of Bor 1993.
- * Features 50% damage reduction from frontal attacks due to riot shield.
+ * MUP (Ministarstvo Unutrašnjih Poslova) - 1993 Riot Police
+ * Heavy, armored melee unit.
  */
-export class MUP extends Enemy {
-    private isShieldRaised: boolean = true;
-    private isBatonStriking: boolean = false;
+export class MUP extends Phaser.Physics.Arcade.Sprite {
+    public health: number = 60; // Armored, takes a few hits
+    public isDead: boolean = false;
+    public isHurt: boolean = false;
+    public isAttacking: boolean = false;
+    
+    private speed: number = 80;
+    private attackRange: number = 70;
+    private attackCooldown: number = 0;
 
     constructor(scene: Phaser.Scene, x: number, y: number) {
-        // Initialize using the 'mup_1993' atlas key
-        super(scene, x, y, 'mup_1993');
+        // Grab the starting frame from the Mega-Atlas
+        super(scene, x, y, 'enemies_1993', 'mup-idle/001.png');
+
+        scene.add.existing(this);
+        scene.physics.add.existing(this);
+
+        const body = this.body as Phaser.Physics.Arcade.Body;
+        // Belt-scroller hitbox: wide at the feet, short on the Y axis
+        body.setSize(60, 30);
+        body.setOffset(20, 150); 
         
-        // MUP has moderate health
-        this.health = 180;
-        this.maxHealth = 180;
-        this.speed = 100; // Slightly slower due to shield
+        this.setOrigin(0.5, 1);
+        body.setCollideWorldBounds(true);
+        body.setAllowGravity(false); // Fake 3D depth, no real gravity
+
+        this.play('mup-idle');
     }
 
     /**
-     * Defensive Overlap: Checks if the attack hits the shield.
-     * Frontal attacks are mitigated by 50%.
+     * AI Logic: Called every frame by MainLevel.ts
+     */
+    public updateAI(player: Player) {
+        if (this.isDead || this.isHurt || this.isAttacking) {
+            this.setVelocity(0, 0);
+            return;
+        }
+
+        const distanceX = Math.abs(this.x - player.x);
+        const distanceY = Math.abs(this.y - player.y);
+
+        // Turn to face the player
+        this.setFlipX(player.x < this.x);
+
+        // Check if in attack range (both X distance and Z-depth/Y distance)
+        if (distanceX < this.attackRange && distanceY < 20) {
+            this.setVelocity(0, 0);
+            
+            // Respect the cooldown before swinging again
+            if (this.scene.time.now > this.attackCooldown) {
+                this.executeAttack(player);
+            } else if (this.anims.currentAnim?.key !== 'mup-idle') {
+                this.play('mup-idle', true);
+            }
+        } else {
+            // Move towards the player
+            const dirX = player.x > this.x ? 1 : -1;
+            const dirY = player.y > this.y ? 1 : -1;
+
+            // Move strictly on X if far away, but align Y to get into the same "lane"
+            let vx = dirX * this.speed;
+            let vy = distanceY > 10 ? dirY * (this.speed * 0.6) : 0;
+
+            this.setVelocity(vx, vy);
+            
+            if (this.anims.currentAnim?.key !== 'mup-walk') {
+                this.play('mup-walk', true);
+            }
+        }
+    }
+
+    private executeAttack(player: Player) {
+        this.isAttacking = true;
+        
+        // Randomly choose between punch 1 and punch 2 from the CSV
+        const attackAnim = Phaser.Math.Between(0, 1) === 0 ? 'mup-punch-1' : 'mup-punch-2';
+        this.play(attackAnim, true);
+
+        // Play swing sound
+        this.scene.events.emit('play-generic-sfx', 'woosh_heavy');
+
+        // Apply damage at the apex of the animation (approx 300ms in)
+        this.scene.time.delayedCall(300, () => {
+            if (this.isDead || this.isHurt) return; // Cancel if he was hit mid-swing
+
+            const distanceX = Math.abs(this.x - player.x);
+            const distanceY = Math.abs(this.y - player.y);
+
+            // Re-check range to make sure the player didn't dodge
+            if (distanceX < this.attackRange + 10 && distanceY < 30) {
+                player.takeDamage(15);
+            }
+        });
+
+        // Reset state when animation finishes
+        this.on('animationcomplete', (anim: any) => {
+            if (anim.key === 'mup-punch-1' || anim.key === 'mup-punch-2') {
+                this.isAttacking = false;
+                this.attackCooldown = this.scene.time.now + 1200; // 1.2 second pause between attacks
+                this.play('mup-idle', true);
+            }
+        });
+    }
+
+    /**
+     * Called by CollisionManager or Player melee hitbox
      */
     public takeDamage(amount: number) {
         if (this.isDead) return;
 
-        // Find the player to check facing direction
-        const player = (this.scene as any).player;
-        if (!player) {
-            super.takeDamage(amount);
-            return;
-        }
+        this.health -= amount;
+        this.isHurt = true;
+        this.isAttacking = false;
 
-        // Check if the MUP is facing the player to block
-        const isFacingPlayer = (player.x > this.x && !this.flipX) || (player.x < this.x && this.flipX);
+        // Kinetic Feedback: Flash white
+        this.setTintFill(0xffffff);
+        this.scene.time.delayedCall(50, () => this.clearTint());
 
-        if (this.isShieldRaised && isFacingPlayer) {
-            // Shield block: 50% damage reduction
-            const reducedAmount = Math.ceil(amount * 0.5);
-            super.takeDamage(reducedAmount);
-
-            // Play block animation instead of standard hurt animation if not dead
-            if (!this.isDead) {
-                this.play('mup_1993_wince', true);
-                
-                // Metallic spark visual feedback
-                this.scene.events.emit('spawn-industrial-debris', { 
-                    x: this.x + (this.flipX ? -20 : 20), 
-                    y: this.y - 40 
-                });
-                
-                // Play shield hit sound
-                this.scene.sound.playAudioSprite('sfx_atlas', 'shield_block');
-            }
-        } else {
-            // Flanked or attacked from behind: Full damage
-            super.takeDamage(amount);
-        }
-    }
-
-    /**
-     * AI Logic: Standard stalking toward player with strike range check.
-     */
-    public updateAI(player: Phaser.GameObjects.Sprite) {
-        if (this.isDead || this.isHurt || this.isBatonStriking) return;
-
-        const distX = Math.abs(player.x - this.x);
-        const distY = Math.abs(player.y - this.y);
-
-        // Strike Range: 120px reach
-        if (distX <= 120 && distY <= 40) {
-            this.executeBatonStrike();
-        } else {
-            // Use base Enemy class stalking logic
-            super.updateAI(player);
-        }
-    }
-
-    /**
-     * Baton Strike: Heavy horizontal arc that denies the immediate area.
-     */
-    private executeBatonStrike() {
-        this.isBatonStriking = true;
-        this.setVelocityX(0); // Stop moving to swing
-        this.isShieldRaised = false; // Lower shield while swinging!
-
-        this.play('mup_1993_attack', true);
-
-        // Frame 4: Impact frame for the baton swing
-        this.on('animationupdate', (anim: Phaser.Animations.Animation, frame: Phaser.Animations.AnimationFrame) => {
-            if (frame.index === 4) {
-                this.triggerBatonImpact();
-            }
-        });
-
-        this.once('animationcomplete', () => {
-            this.isBatonStriking = false;
-            this.isShieldRaised = true; // Raise shield again
-            this.off('animationupdate');
-            this.play('mup_1993_idle', true);
-        });
-    }
-
-    /**
-     * Creates the damage hitbox for the baton.
-     */
-    private triggerBatonImpact() {
-        // Play swing sound
-        this.scene.sound.playAudioSprite('sfx_atlas', 'baton_swing');
-
-        const xDir = this.flipX ? -1 : 1;
+        // Spawn Industrial Sparks (hitting armor)
+        this.scene.events.emit('spawn-gore', { x: this.x, y: this.y - 100, type: 'INDUSTRIAL' });
         
-        // Create "Ghost Hitbox" for the baton reach
-        const impactZone = this.scene.add.zone(this.x + (60 * xDir), this.y - 40, 80, 80);
-        this.scene.physics.add.existing(impactZone);
+        // Play Hurt Sound
+        this.scene.events.emit('play-sfx', { character: 'mup', action: 'damage' });
 
-        const player = (this.scene as any).player;
-        if (player) {
-            this.scene.physics.add.overlap(impactZone, player, (z, p: any) => {
-                if (p.takeDamage && !p.isHurt) {
-                    p.takeDamage(15); // Standard baton damage
-                    this.scene.events.emit('spawn-gore', { x: player.x, y: player.y, type: 'CLASSIC' });
+        if (this.health <= 0) {
+            this.die();
+        } else {
+            this.play('mup-damage', true);
+            
+            // Pushback effect
+            const pushback = this.flipX ? 15 : -15;
+            this.x += pushback;
+
+            this.scene.time.delayedCall(400, () => {
+                if (!this.isDead) {
+                    this.isHurt = false;
+                    this.play('mup-idle', true);
                 }
             });
         }
-
-        // Cleanup zone instantly after active frame
-        this.scene.time.delayedCall(50, () => impactZone.destroy());
     }
 
-    /**
-     * Override standard death to include dropping the shield.
-     */
-    protected die() {
-        super.die();
-        this.isShieldRaised = false;
+    private die() {
+        this.isDead = true;
+        this.setVelocity(0, 0);
         
-        // Shield dropping sound
-        this.scene.sound.playAudioSprite('sfx_atlas', 'sfx_metal_clang'); 
+        // Disable physics body so players/bullets walk through the corpse
+        (this.body as Phaser.Physics.Arcade.Body).enable = false;
+
+        this.scene.events.emit('play-sfx', { character: 'mup', action: 'dying' });
+        this.play('mup-dying', true);
+
+        // Optional: Drop Dinar loot when defeated
+        if (Phaser.Math.Between(1, 100) <= 30) {
+            const mainLevel = this.scene as any;
+            if (mainLevel.groundItems) {
+                const item = this.scene.physics.add.sprite(this.x, this.y - 20, 'item_dinar') as any;
+                item.lootData = { key: 'item_dinar', type: 'score', value: 100 };
+                mainLevel.groundItems.add(item);
+                
+                this.scene.tweens.add({
+                    targets: item,
+                    y: this.y - 60,
+                    duration: 300,
+                    yoyo: true,
+                    ease: 'Quad.easeOut'
+                });
+            }
+        }
     }
 }
