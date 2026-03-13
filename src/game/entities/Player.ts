@@ -1,184 +1,270 @@
 import Phaser from 'phaser';
-import { Weapon } from './Weapon';
-import { eventBus } from '../EventBus';
 
-export type PlayerState = 'NORMAL' | 'EQUIPPED';
+export class Player extends Phaser.Physics.Arcade.Sprite {
+    public characterName: string;
+    
+    // Core Stats (These are overridden by Marko/Darko/Maja subclasses)
+    public health: number = 100;
+    public maxHealth: number = 100;
+    public smfMeter: number = 0;
+    public speed: number = 220;
 
-export class Player extends Phaser.GameObjects.Container {
-  private sprite: Phaser.GameObjects.Rectangle;
-  private speed: number = 300;
-  private canShoot: boolean = true;
-  private shootCooldown: number = 500;
-  private health: number = 3;
-  private maxHealth: number = 3;
-  private isInvulnerable: boolean = false;
-  private invulnerabilityTime: number = 2000;
+    // State Flags
+    public isAttacking: boolean = false;
+    public isJumping: boolean = false;
+    public isInvulnerable: boolean = false;
+    public facingRight: boolean = true;
 
-  // Weapon system
-  private weaponState: PlayerState = 'NORMAL';
-  private equippedWeapon: Weapon | null = null;
-  private facingRight: boolean = true;
+    // Weapon State
+    public ammo: number = 5; 
+    public hasGun: boolean = true; // True when holding the M70, False when bare-handed
 
-  constructor(scene: Phaser.Scene, x: number, y: number) {
-    super(scene, x, y);
+    constructor(scene: Phaser.Scene, x: number, y: number, name: string) {
+        // Initialize with the character's idle animation from the CSV
+        super(scene, x, y, `${name}_idle`);
+        this.characterName = name;
 
-    // Create player sprite (Marko)
-    this.sprite = scene.add.rectangle(0, 0, 32, 48, 0xcc0000);
-    this.sprite.setStrokeStyle(2, 0xff0000);
-    this.add(this.sprite);
-
-    // Add head
-    const head = scene.add.circle(0, -20, 12, 0xffcc99);
-    head.setStrokeStyle(2, 0xcc9966);
-    this.add(head);
-
-    // Add to scene
-    scene.add.existing(this);
-    scene.physics.add.existing(this);
-
-    // Setup physics body
-    const body = this.body as Phaser.Physics.Arcade.Body;
-    body.setSize(32, 48);
-    body.setCollideWorldBounds(true);
-  }
-
-  update(cursors: Phaser.Types.Input.Keyboard.CursorKeys): void {
-    const body = this.body as Phaser.Physics.Arcade.Body;
-
-    // Horizontal movement + facing direction
-    if (cursors.left?.isDown) {
-      body.setVelocityX(-this.speed);
-      this.facingRight = false;
-    } else if (cursors.right?.isDown) {
-      body.setVelocityX(this.speed);
-      this.facingRight = true;
-    } else {
-      body.setVelocityX(0);
+        // Add to scene and enable physics
+        scene.add.existing(this);
+        scene.physics.add.existing(this);
+        
+        // Define the physics body size and offset
+        const body = this.body as Phaser.Physics.Arcade.Body;
+        body.setSize(80, 40); 
+        body.setOffset(88, 210);
+        this.setOrigin(0.5, 1);
+        
+        // The player moves in a 2D plane that fakes 3D depth, so no Y-gravity
+        body.setAllowGravity(false); 
+        body.setCollideWorldBounds(true);
     }
 
-    // Blinking effect when invulnerable
-    if (this.isInvulnerable) {
-      this.alpha = Math.sin(this.scene.time.now * 0.02) * 0.5 + 0.5;
-    } else {
-      this.alpha = 1;
-    }
-  }
-
-  /**
-   * Attack action — delegates to weapon fire or basic punch based on state.
-   * Returns a beam Rectangle for NORMAL state (backward compat), or null for EQUIPPED.
-   */
-  shoot(): Phaser.GameObjects.Rectangle | null {
-    if (this.weaponState === 'EQUIPPED' && this.equippedWeapon) {
-      const fired = this.equippedWeapon.fire(this.x, this.y, this.facingRight);
-
-      if (!fired && this.equippedWeapon.isEmpty()) {
-        // Empty weapon → throw it and revert to NORMAL
-        this.throwWeapon();
-      }
-      return null;
+    /**
+     * Called every frame by MainLevel.ts
+     */
+    update() {
+        if (this.health <= 0) return;
+        
+        this.handleMovement();
+        this.handleCombatInput();
+        
+        // Invulnerability Blinking Effect
+        if (this.isInvulnerable) {
+            this.alpha = Math.sin(this.scene.time.now * 0.02) * 0.5 + 0.5;
+        } else {
+            this.alpha = 1;
+        }
     }
 
-    // NORMAL state — original beam/punch logic
-    if (!this.canShoot) return null;
-    this.canShoot = false;
+    /**
+     * Handles keyboard movement and updates walking/idle animations
+     */
+    private handleMovement() {
+        if (this.isAttacking) return;
+        
+        const cursors = this.scene.input.keyboard.createCursorKeys();
+        let vx = 0, vy = 0;
 
-    const beam = this.scene.add.rectangle(
-      this.x,
-      this.y - 30,
-      8,
-      20,
-      0xffff00
-    );
-    beam.setStrokeStyle(2, 0xff8800);
+        if (cursors.left.isDown) { 
+            vx = -1; 
+            this.flipX = true; 
+            this.facingRight = false;
+        } else if (cursors.right.isDown) { 
+            vx = 1; 
+            this.flipX = false; 
+            this.facingRight = true;
+        }
+        
+        if (cursors.up.isDown) vy = -0.7; 
+        else if (cursors.down.isDown) vy = 0.7;
 
-    this.scene.physics.add.existing(beam);
-    const beamBody = beam.body as Phaser.Physics.Arcade.Body;
-    beamBody.setVelocityY(-600);
-    beamBody.setSize(8, 20);
+        this.setVelocity(vx * this.speed, vy * this.speed);
+        
+        // Update standard animations if not jumping
+        if (!this.isJumping) {
+            if (vx !== 0 || vy !== 0) {
+                this.play(`${this.characterName}_walk`, true);
+            } else {
+                // Determine which idle animation to play based on weapon state
+                const idleAnim = this.hasGun ? 'shoot_idle' : 'idle';
+                this.play(`${this.characterName}_${idleAnim}`, true);
+            }
+        }
+    }
 
-    this.scene.time.delayedCall(this.shootCooldown, () => {
-      this.canShoot = true;
-    });
+    /**
+     * Handles standard attacks (A key) and jumping (Space).
+     * (Special attacks Q and E are handled in the subclasses like Marko.ts)
+     */
+    protected handleCombatInput() {
+        const attackKey = this.scene.input.keyboard.addKey('A');
+        const jumpKey = this.scene.input.keyboard.addKey('SPACE');
 
-    return beam;
-  }
+        // Handle Standard Attack
+        if (Phaser.Input.Keyboard.JustDown(attackKey) && !this.isAttacking) {
+            if (this.isJumping) {
+                // Aerial Melee (Disables gun logic while airborne)
+                this.executeMelee('jump_punch');
+            } else {
+                // Grounded Combat Logic
+                if (this.hasGun && this.ammo > 0) {
+                    this.executeRangedAttack();
+                } else if (this.hasGun && this.ammo <= 0) {
+                    this.executeWeaponThrow();
+                } else {
+                    this.executeMelee('punch_1');
+                }
+            }
+        }
 
-  // ── Weapon API ──
+        // Handle Jump
+        if (Phaser.Input.Keyboard.JustDown(jumpKey) && !this.isJumping && !this.isAttacking) {
+            this.executeJump();
+        }
+    }
 
-  equipWeapon(weapon: Weapon): void {
-    this.equippedWeapon?.destroy();
-    this.equippedWeapon = weapon;
-    this.weaponState = 'EQUIPPED';
-    eventBus.emit('weapon:equipped', weapon.getName(), weapon.getAmmo(), weapon.getMaxAmmo());
-  }
+    /**
+     * Standard Jump logic. (Darko overrides this for a higher jump).
+     */
+    protected executeJump() {
+        this.isJumping = true;
+        this.play(`${this.characterName}_jump`, true);
+        
+        this.scene.tweens.add({
+            targets: this,
+            y: this.y - 150,
+            duration: 400,
+            yoyo: true,
+            ease: 'Quad.easeOut',
+            onComplete: () => { 
+                this.isJumping = false; 
+                if (!this.isAttacking) {
+                    const idleAnim = this.hasGun ? 'shoot_idle' : 'idle';
+                    this.play(`${this.characterName}_${idleAnim}`, true);
+                }
+            }
+        });
+    }
 
-  private throwWeapon(): void {
-    if (!this.equippedWeapon) return;
+    /**
+     * Shoots the M70 using the 1-frame recoil technique.
+     */
+    private executeRangedAttack() {
+        this.isAttacking = true;
+        this.ammo--;
+        
+        // Play gunshot sound
+        this.scene.sound.playAudioSprite('sfx_atlas', 'm70_fire');
 
-    // Visual "throw" — a small rectangle flung forward
-    const dirMult = this.facingRight ? 1 : -1;
-    const thrown = this.scene.add.rectangle(this.x + 20 * dirMult, this.y - 10, 16, 8, 0x888888);
-    thrown.setStrokeStyle(1, 0x444444);
-    this.scene.physics.add.existing(thrown);
-    const thrownBody = thrown.body as Phaser.Physics.Arcade.Body;
-    thrownBody.setVelocity(400 * dirMult, -150);
+        // Swap to 1-frame Recoil animation
+        this.play(`${this.characterName}_shoot_recoil`, true);
+        
+        // Push the character back 5 pixels to simulate recoil weight
+        const pushback = this.flipX ? 5 : -5;
+        this.x += pushback;
 
-    this.scene.tweens.add({
-      targets: thrown,
-      angle: 720 * dirMult,
-      alpha: 0,
-      duration: 600,
-      onComplete: () => thrown.destroy(),
-    });
+        // Spawn the BULLET Projectile
+        this.scene.events.emit('spawn-projectile', {
+            x: this.x + (this.flipX ? -110 : 110),
+            y: this.y - 125,
+            direction: this.flipX ? -1 : 1,
+            type: 'BULLET'
+        });
 
-    eventBus.emit('weapon:thrown');
-    this.equippedWeapon.destroy();
-    this.equippedWeapon = null;
-    this.weaponState = 'NORMAL';
-  }
+        // 100ms Recovery: Revert to Shoot Idle and restore position
+        this.scene.time.delayedCall(100, () => {
+            this.x -= pushback; // Restore X position
+            if (!this.isDead) this.play(`${this.characterName}_shoot_idle`, true);
+            this.isAttacking = false;
+        });
+    }
 
-  getWeaponState(): PlayerState {
-    return this.weaponState;
-  }
+    /**
+     * Throws the empty M70 rifle at the enemy.
+     */
+    private executeWeaponThrow() {
+        this.isAttacking = true;
+        this.play(`${this.characterName}_throw`, true); 
 
-  getEquippedWeapon(): Weapon | null {
-    return this.equippedWeapon;
-  }
+        // Spawn the THROW Projectile mid-animation
+        this.scene.time.delayedCall(200, () => {
+            this.scene.events.emit('spawn-projectile', {
+                x: this.x + (this.flipX ? -60 : 60), 
+                y: this.y - 110, 
+                direction: this.flipX ? -1 : 1, 
+                type: 'THROW' // Tells Projectile.ts to use arc gravity and rotation
+            });
+            
+            // Mark the player as bare-handed
+            this.hasGun = false;
+        });
 
-  isFacingRight(): boolean {
-    return this.facingRight;
-  }
+        this.scene.time.delayedCall(400, () => { 
+            this.isAttacking = false;
+            this.play(`${this.characterName}_idle`, true); 
+        });
+    }
 
-  // ── Health (unchanged) ──
+    /**
+     * Executes a standard bare-handed punch.
+     */
+    protected executeMelee(animKey: string) {
+        this.isAttacking = true;
+        this.play(`${this.characterName}_${animKey}`, true);
+        
+        // Basic Hitbox creation
+        const xOffset = this.flipX ? -60 : 60;
+        const hitbox = this.scene.add.zone(this.x + xOffset, this.y - 40, 60, 60);
+        this.scene.physics.add.existing(hitbox);
 
-  takeDamage(): boolean {
-    if (this.isInvulnerable) return false;
+        const enemiesGroup = (this.scene as any).enemies;
+        if (enemiesGroup) {
+            this.scene.physics.add.overlap(hitbox, enemiesGroup, (hb, enemyObj: any) => {
+                if (enemyObj.takeDamage && !enemyObj.isHurt) {
+                    enemyObj.takeDamage(10); // Standard punch damage
+                    this.scene.events.emit('spawn-gore', { x: enemyObj.x, y: enemyObj.y, type: 'CLASSIC' });
+                }
+            });
+        }
 
-    this.health--;
-    this.isInvulnerable = true;
+        // Cleanup hitbox
+        this.scene.time.delayedCall(200, () => { 
+            hitbox.destroy();
+            this.isAttacking = false; 
+        });
+    }
 
-    this.sprite.fillColor = 0xff0000;
-    this.scene.time.delayedCall(100, () => {
-      this.sprite.fillColor = 0xcc0000;
-    });
+    /**
+     * Called when an enemy successfully strikes the player.
+     */
+    public takeDamage(amount: number) {
+        if (this.isInvulnerable || this.health <= 0) return;
 
-    this.scene.time.delayedCall(this.invulnerabilityTime, () => {
-      this.isInvulnerable = false;
-    });
+        this.health -= amount;
+        this.isInvulnerable = true;
+        this.isAttacking = false; // Interrupt current attack
 
-    return this.health <= 0;
-  }
+        // Play hurt animation
+        this.play(`${this.characterName}_damage_&_hurt`, true);
+        
+        // Update React HUD
+        this.scene.events.emit('update-health', this.health);
 
-  getHealth(): number {
-    return this.health;
-  }
+        // Recovery Time
+        this.scene.time.delayedCall(400, () => { 
+            if (this.health > 0) {
+                const idleAnim = this.hasGun ? 'shoot_idle' : 'idle';
+                this.play(`${this.characterName}_${idleAnim}`, true);
+            }
+        });
 
-  getMaxHealth(): number {
-    return this.maxHealth;
-  }
+        // End Invulnerability frames after 1.5 seconds
+        this.scene.time.delayedCall(1500, () => { 
+            this.isInvulnerable = false; 
+        });
+    }
 
-  resetHealth(): void {
-    this.health = this.maxHealth;
-  }
+    public get isDead(): boolean {
+        return this.health <= 0;
+    }
 }
