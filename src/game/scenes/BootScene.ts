@@ -1,152 +1,129 @@
 import Phaser from 'phaser';
 
 export class BootScene extends Phaser.Scene {
-  constructor() {
-    super({ key: 'BootScene' });
-  }
-
-  preload(): void {
-    const width = this.cameras.main.width;
-    const height = this.cameras.main.height;
-
-    const progressBar = this.add.graphics();
-    const progressBox = this.add.graphics();
-    progressBox.fillStyle(0x222222, 0.8);
-    progressBox.fillRect(width / 2 - 160, height / 2 - 25, 320, 50);
-
-    const loadingText = this.add.text(width / 2, height / 2 - 50, 'LOADING...', {
-      fontFamily: 'Press Start 2P',
-      fontSize: '16px',
-      color: '#cc0000'
-    });
-    loadingText.setOrigin(0.5);
-
-    const percentText = this.add.text(width / 2, height / 2, '0%', {
-      fontFamily: 'VT323',
-      fontSize: '24px',
-      color: '#ffffff'
-    });
-    percentText.setOrigin(0.5);
-
-    this.load.on('progress', (value: number) => {
-      percentText.setText(`${Math.floor(value * 100)}%`);
-      progressBar.clear();
-      progressBar.fillStyle(0xcc0000, 1);
-      progressBar.fillRect(width / 2 - 150, height / 2 - 15, 300 * value, 30);
-    });
-
-    this.load.on('complete', () => {
-      progressBar.destroy();
-      progressBox.destroy();
-      loadingText.destroy();
-      percentText.destroy();
-    });
-
-    // ── Audio: Weapons ──
-    this.load.audio('gun_shot_m70', 'assets/audio/sfx/gun-shot-m70.wav');
-    this.load.audio('gun_fire_laser', 'assets/audio/sfx/gun-fire-laser.wav');
-
-    // ── Audio: Dizelcic Aerosol (random pick) ──
-    this.load.audio('dizelcic_aerosol_1', 'assets/audio/sfx/Dizelcic-Aerosol_1.mp3');
-    this.load.audio('dizelcic_aerosol_2', 'assets/audio/sfx/Dizelcic-Aerosol_2.mp3');
-
-    // ── Audio: Object destruction (random pick) ──
-    this.load.audio('break_1', 'assets/audio/sfx/Break_1.mp3');
-    this.load.audio('break_2', 'assets/audio/sfx/Break_2.mp3');
-    this.load.audio('break_3', 'assets/audio/sfx/Break_3.mp3');
-
-    // ── Images: Laser effects ──
-    this.load.image('effect_laser_1', 'assets/fx/effect-laser-1.png');
-    this.load.image('effect_laser_2', 'assets/fx/effect-laser-2.png');
-    this.load.image('effect_laser_3', 'assets/fx/effect-laser-3.png');
-
-    // ── Spritesheet: M70 muzzle flash ──
-    this.load.spritesheet('muzzle_flash_m70', 'assets/fx/muzzle-flash-m70.png', {
-      frameWidth: 64,
-      frameHeight: 64,
-    });
-
-    // ── Environment backgrounds (Part 1) ──
-    this.load.image('part1_sky', 'assets/images/environments/part1_sky.png');
-    this.load.image('part1_mid', 'assets/images/environments/part1_mid.png');
-    this.load.image('part1_floor', 'assets/images/environments/part1_floor.png');
-
-    this.createPlaceholderAssets();
-  }
-
-  private createPlaceholderAssets(): void {
-    // Create sky background with gradient effect
-    const skyGraphics = this.make.graphics({ x: 0, y: 0 });
-    // Draw gradient manually
-    for (let y = 0; y < 600; y++) {
-      const ratio = y / 600;
-      const r = Math.floor(26 + ratio * (15 - 26));
-      const g = Math.floor(26 + ratio * (15 - 26));
-      const b = Math.floor(46 + ratio * (35 - 46));
-      skyGraphics.fillStyle(Phaser.Display.Color.GetColor(r, g, b));
-      skyGraphics.fillRect(0, y, 800, 1);
+    constructor() {
+        super({ key: 'BootScene' });
     }
-    // Add some stars
-    skyGraphics.fillStyle(0xffffff);
-    for (let i = 0; i < 50; i++) {
-      const x = Math.random() * 800;
-      const y = Math.random() * 400;
-      skyGraphics.fillCircle(x, y, Math.random() * 1.5);
-    }
-    skyGraphics.generateTexture('bg_sky', 800, 600);
-    skyGraphics.destroy();
 
-    // Create mid layer (buildings silhouette)
-    const midGraphics = this.make.graphics({ x: 0, y: 0 });
-    midGraphics.fillStyle(0x1a1a2e);
-    midGraphics.fillRect(0, 0, 800, 600);
-    // Draw brutalist building silhouettes
-    midGraphics.fillStyle(0x0d0d1a);
-    const buildings = [
-      { x: 0, w: 80, h: 180 },
-      { x: 90, w: 60, h: 250 },
-      { x: 160, w: 100, h: 150 },
-      { x: 280, w: 70, h: 300 },
-      { x: 360, w: 90, h: 200 },
-      { x: 470, w: 80, h: 280 },
-      { x: 560, w: 110, h: 160 },
-      { x: 680, w: 60, h: 220 },
-      { x: 750, w: 50, h: 190 }
-    ];
-    buildings.forEach(b => {
-      midGraphics.fillRect(b.x, 600 - b.h, b.w, b.h);
-      // Add some windows
-      midGraphics.fillStyle(0x2a2a4a);
-      for (let wy = 600 - b.h + 20; wy < 580; wy += 30) {
-        for (let wx = b.x + 10; wx < b.x + b.w - 10; wx += 20) {
-          if (Math.random() > 0.3) {
-            midGraphics.fillRect(wx, wy, 8, 12);
-          }
+    preload() {
+        // 1. CREATE A LOADING BAR
+        const width = this.cameras.main.width;
+        const height = this.cameras.main.height;
+        
+        const progressBar = this.add.graphics();
+        const progressBox = this.add.graphics();
+        progressBox.fillStyle(0x222222, 0.8);
+        progressBox.fillRect(width / 2 - 160, height / 2 - 25, 320, 50);
+
+        const loadingText = this.make.text({
+            x: width / 2,
+            y: height / 2 - 50,
+            text: 'DECRYPTING ASSETS...',
+            style: { font: '20px monospace', color: '#39FF14' } // SMF Green
+        }).setOrigin(0.5, 0.5);
+
+        this.load.on('progress', (value: number) => {
+            progressBar.clear();
+            progressBar.fillStyle(0xff8c00, 1); // Orange
+            progressBar.fillRect(width / 2 - 150, height / 2 - 15, 300 * value, 30);
+        });
+
+        this.load.on('complete', () => {
+            progressBar.destroy();
+            progressBox.destroy();
+            loadingText.destroy();
+        });
+
+        // ==========================================
+        // 2. LOAD YOUR ASSETS
+        // (Vite requires these to be in your /public folder)
+        // ==========================================
+
+        // Background
+        this.load.image('part1_sky', '/part1_sky.jpg');
+
+        // Characters (Assuming you exported them as Texture Atlases: a PNG and a JSON)
+        // If you are using standard spritesheets, change this to this.load.spritesheet()
+        this.load.atlas('marko', '/assets/sprites/marko.png', '/assets/sprites/marko.json');
+        this.load.atlas('darko', '/assets/sprites/darko.png', '/assets/sprites/darko.json');
+        this.load.atlas('maja', '/assets/sprites/maja.png', '/assets/sprites/maja.json');
+
+        // Load the CSV Data as raw text
+        this.load.text('movements_csv', '/assets/data/BOR _ Graphic Asset Register - Movements.csv');
+        
+        // (Optional: Load your audio atlas here if you have it)
+        // this.load.audioSprite('sfx_atlas', '/assets/audio/sfx_atlas.json', ['/assets/audio/sfx_atlas.ogg', '/assets/audio/sfx_atlas.mp3']);
+    }
+
+    create() {
+        // 3. PARSE THE CSV AND GENERATE ANIMATIONS
+        this.generateAnimationsFromCSV();
+
+        // 4. TRANSITION TO THE GAME
+        // Add a slight delay just so the player can appreciate the 1993 loading aesthetic
+        this.time.delayedCall(500, () => {
+            this.scene.start('MainLevel');
+        });
+    }
+
+    /**
+     * Reads the loaded CSV text and automatically registers all character animations in Phaser.
+     */
+    private generateAnimationsFromCSV() {
+        const csvData = this.cache.text.get('movements_csv');
+        if (!csvData) {
+            console.warn("CSV data not found! Animations will not play.");
+            return;
         }
-      }
-      midGraphics.fillStyle(0x0d0d1a);
-    });
-    midGraphics.generateTexture('bg_mid', 800, 600);
-    midGraphics.destroy();
 
-    // Create floor layer
-    const floorGraphics = this.make.graphics({ x: 0, y: 0 });
-    floorGraphics.fillStyle(0x2a2a3e);
-    floorGraphics.fillRect(0, 0, 800, 100);
-    // Add cobblestone pattern
-    floorGraphics.fillStyle(0x3a3a4e);
-    for (let i = 0; i < 40; i++) {
-      floorGraphics.fillRect(i * 20, 0, 18, 10);
-      floorGraphics.fillRect(i * 20 + 10, 15, 18, 10);
+        // Split the CSV into rows
+        const rows = csvData.split('\n');
+        
+        // Skip the header row (assuming row 0 is headers like Character,AnimName,Prefix,Start,End,Framerate,Repeat)
+        for (let i = 1; i < rows.length; i++) {
+            const row = rows[i].trim();
+            if (!row) continue;
+
+            const cols = row.split(',');
+
+            // Adjust these indices based on exactly how your columns are ordered in Google Sheets!
+            // Example Assumption: 
+            // Col 0: Character (marko)
+            // Col 1: AnimName (special_attack)
+            // Col 2: Prefix (marko_attack_)
+            // Col 3: StartFrame (0)
+            // Col 4: EndFrame (6)
+            // Col 5: FrameRate (12)
+            // Col 6: Repeat (-1 for loop, 0 for play once)
+            
+            const character = cols[0]?.trim();
+            const animName = cols[1]?.trim();
+            const prefix = cols[2]?.trim();
+            const startFrame = parseInt(cols[3]?.trim(), 10);
+            const endFrame = parseInt(cols[4]?.trim(), 10);
+            const frameRate = parseInt(cols[5]?.trim(), 10) || 10;
+            const repeat = parseInt(cols[6]?.trim(), 10) || 0;
+
+            if (character && animName && prefix && !isNaN(startFrame) && !isNaN(endFrame)) {
+                // E.g., Generates 'marko_special_attack'
+                const globalAnimKey = `${character}_${animName}`;
+
+                // Tell Phaser to build this animation
+                this.anims.create({
+                    key: globalAnimKey,
+                    frames: this.anims.generateFrameNames(character, {
+                        prefix: prefix,
+                        start: startFrame,
+                        end: endFrame,
+                        zeroPad: 2, // e.g., marko_attack_01 (change to 0 if no padding)
+                        suffix: '.png' // Adjust if your JSON packer doesn't use .png suffixes
+                    }),
+                    frameRate: frameRate,
+                    repeat: repeat
+                });
+            }
+        }
+        
+        console.log("All CSV Animations successfully generated!");
     }
-    // Add gutter
-    floorGraphics.fillStyle(0x1a1a2a);
-    floorGraphics.fillRect(0, 30, 800, 5);
-    floorGraphics.generateTexture('bg_floor', 800, 100);
-    floorGraphics.destroy();
-  }
-
-  create(): void {
-    this.scene.start('MenuScene');
-  }
 }
