@@ -3,6 +3,7 @@ import { CharacterSelector } from './components/CharacterSelector';
 import { GameContainer } from './components/GameContainer';
 import { SettingsMenu, ControlsHUD } from './components/SettingsMenu';
 import { WorldMap } from './components/WorldMap';
+import { GameHUD } from './components/GameHUD';
 
 export default function App() {
   // --- Core Game Flow State ---
@@ -15,7 +16,6 @@ export default function App() {
   const [crtEnabled, setCrtEnabled] = useState(true);
   const [volume, setVolume] = useState(0.5);
 
-  // Triggered by the 3D Character Selector
   const handleCharacterSelect = (character: string) => {
     setSelectedCharacter(character);
     setGameState('PLAYING');
@@ -24,7 +24,7 @@ export default function App() {
   return (
     <div className="w-screen h-screen bg-black overflow-hidden relative">
       
-      {/* Top Right Navigation UI (Always accessible, Map only when playing) */}
+      {/* Top Right Navigation UI */}
       <div className="absolute top-4 right-4 z-50 flex gap-3">
         {gameState === 'PLAYING' && (
           <button 
@@ -54,8 +54,11 @@ export default function App() {
 
       {/* --- HUD & OVERLAYS --- */}
       
-      {/* Permanent Controls HUD (Only visible during gameplay) */}
+      {/* Permanent Controls Reminder */}
       {gameState === 'PLAYING' && <ControlsHUD />}
+
+      {/* Modern React Game HUD (Option B) */}
+      {gameState === 'PLAYING' && <GameHUD />}
 
       {/* Settings Modal */}
       <SettingsMenu 
