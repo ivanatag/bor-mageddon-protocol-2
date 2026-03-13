@@ -1,204 +1,183 @@
 import Phaser from 'phaser';
-import { eventBus, GameEvents } from '../EventBus';
-import { Weapon } from './Weapon';
+import { Player } from './Player';
 
-/**
- * Darko – The Lanky Bassist. High jump, long melee reach.
- * Special: "Feedback Blast" – directional shockwave from bass guitar.
- * Uses sprite key 'darko_atlas' (256x256 frames).
- */
-export class Darko extends Phaser.GameObjects.Container {
-  private torso: Phaser.GameObjects.Rectangle;
-  private headCircle: Phaser.GameObjects.Arc;
-
-  // Lanky physics: faster, higher jump arc
-  private speed: number = 350;
-  private health: number = 4;
-  private maxHealth: number = 4;
-  private isInvulnerable: boolean = false;
-  private invulnerabilityMs: number = 1800;
-  private facingRight: boolean = true;
-
-  // Long-range bass guitar melee hitbox
-  private meleeRange: number = 80; // extended reach
-  private meleeDamage: number = 2;
-  private canMelee: boolean = true;
-  private meleeCooldown: number = 600;
-
-  // Feedback Blast special
-  private specialCooldown: number = 0;
-  private specialCooldownMax: number = 10000;
-  private blastWidth: number = 300;
-  private blastDamage: number = 3;
-
-  private equippedWeapon: Weapon | null = null;
-
-  constructor(scene: Phaser.Scene, x: number, y: number) {
-    super(scene, x, y);
-
-    // Tall lanky torso (blue)
-    this.torso = scene.add.rectangle(0, 0, 28, 56, 0x3366cc);
-    this.torso.setStrokeStyle(2, 0x2244aa);
-    this.add(this.torso);
-
-    // Head
-    this.headCircle = scene.add.circle(0, -24, 11, 0xffcc99);
-    this.headCircle.setStrokeStyle(2, 0xcc9966);
-    this.add(this.headCircle);
-
-    // Bass guitar visual
-    const guitar = scene.add.rectangle(20, 5, 40, 6, 0x8B4513);
-    guitar.setStrokeStyle(1, 0x5C3010);
-    this.add(guitar);
-
-    scene.add.existing(this as unknown as Phaser.GameObjects.GameObject);
-    scene.physics.add.existing(this as unknown as Phaser.GameObjects.GameObject);
-
-    const body = (this as any).body as Phaser.Physics.Arcade.Body;
-    body.setSize(28, 56);
-    body.setCollideWorldBounds(true);
-  }
-
-  update(cursors: Phaser.Types.Input.Keyboard.CursorKeys, delta: number): void {
-    const body = (this as any).body as Phaser.Physics.Arcade.Body;
-
-    if (cursors.left?.isDown) {
-      body.setVelocityX(-this.speed);
-      this.facingRight = false;
-    } else if (cursors.right?.isDown) {
-      body.setVelocityX(this.speed);
-      this.facingRight = true;
-    } else {
-      body.setVelocityX(0);
+export class Darko extends Player {
+    // Darko's unique lanky/bassist stats
+    private specialWidth: number = 300;
+    private specialDamage: number = 15;
+    private finisherRadius: number = 250;
+    
+    constructor(scene: Phaser.Scene, x: number, y: number) {
+        // Calls the Player.ts constructor to set up the physics sprite
+        super(scene, x, y, 'darko');
+        
+        // Darko is slightly faster but more fragile than Marko
+        this.health = 90;
+        this.maxHealth = 90;
+        this.smfMeter = 0;
     }
 
-    if (cursors.up?.isDown) {
-      body.setVelocityY(-this.speed);
-    } else if (cursors.down?.isDown) {
-      body.setVelocityY(this.speed);
-    } else {
-      body.setVelocityY(0);
+    /**
+     * OVERRIDE: Lanky Build Jump
+     * Darko has a snappier, higher vertical arc than Marko.
+     */
+    protected executeJump() {
+        this.isJumping = true;
+        this.play(`${this.characterName}_jump`, true);
+        
+        this.scene.tweens.add({
+            targets: this,
+            y: this.y - 180, // Higher jump arc (180px vs Marko's 150px)
+            duration: 350,   // Snappier rise and fall (350ms vs 400ms)
+            yoyo: true,
+            ease: 'Sine.easeInOut',
+            onComplete: () => { 
+                this.isJumping = false; 
+                if (!this.isAttacking) this.play(`${this.characterName}_idle`);
+            }
+        });
     }
 
-    this.setDepth(this.y);
+    /**
+     * OVERRIDE: Extended Reach Melee
+     * Darko's longer arms and bass guitar provide a wider standard hitbox.
+     */
+    protected executeMelee(animKey: string) {
+        this.isAttacking = true;
+        this.play(`${this.characterName}_${animKey}`, true);
 
-    if (this.isInvulnerable) {
-      this.alpha = Math.sin(this.scene.time.now * 0.02) * 0.5 + 0.5;
-    } else {
-      this.alpha = 1;
+        // Extended Reach: Pushes the hitbox further out in front of him
+        const xOffset = this.flipX ? -80 : 80;
+        const hitbox = this.scene.add.zone(this.x + xOffset, this.y - 40, 100, 60);
+        this.scene.physics.add.existing(hitbox);
+
+        const enemiesGroup = (this.scene as any).enemies;
+        if (enemiesGroup) {
+            this.scene.physics.add.overlap(hitbox, enemiesGroup, (hb, enemyObj: any) => {
+                if (enemyObj.takeDamage && !enemyObj.isHurt) {
+                    enemyObj.takeDamage(10); // Standard attack damage
+                    
+                    // Minor hitstop for "juice"
+                    this.scene.physics.world.pause();
+                    this.scene.time.delayedCall(30, () => this.scene.physics.world.resume());
+                }
+            });
+        }
+
+        this.scene.time.delayedCall(250, () => {
+            hitbox.destroy();
+            this.isAttacking = false;
+        });
     }
 
-    if (this.specialCooldown > 0) this.specialCooldown -= delta;
-  }
+    /**
+     * SPECIAL MOVE: Feedback Blast
+     * Consumes 25% SMF. Sends a traveling shockwave across the floor to pop enemies up.
+     * Mapped to CSV animation: 'darko_special_attack'
+     */
+    public executeFeedbackBlast() {
+        if (this.smfMeter < 25 || this.isAttacking) return;
 
-  /** Long-range bass guitar swing. Returns a hitbox rect for collision. */
-  meleeSwing(): Phaser.GameObjects.Rectangle | null {
-    if (!this.canMelee) return null;
-    this.canMelee = false;
+        this.isAttacking = true;
+        this.smfMeter -= 25;
+        this.scene.events.emit('update-smf', this.smfMeter); // Updates React HUD
+        
+        this.play('darko_special_attack', true);
+        
+        // Play specific audio mapped from Sound CSV
+        this.scene.sound.playAudioSprite('sfx_atlas', 'darko-special-smf');
+        this.scene.cameras.main.shake(150, 0.008);
 
-    const dirMult = this.facingRight ? 1 : -1;
-    const hitbox = this.scene.add.rectangle(
-      this.x + this.meleeRange * 0.5 * dirMult,
-      this.y,
-      this.meleeRange,
-      30,
-      0x8B4513,
-      0.3
-    );
-    hitbox.setDepth(998);
+        // Create a traveling directional shockwave
+        const xDir = this.flipX ? -1 : 1;
+        const shockwave = this.scene.add.zone(this.x + (50 * xDir), this.y - 40, 100, 80);
+        this.scene.physics.add.existing(shockwave);
+        
+        // Send the hitbox flying forward
+        (shockwave.body as Phaser.Physics.Arcade.Body).setVelocityX(450 * xDir);
 
-    this.scene.physics.add.existing(hitbox);
-    (hitbox as any).damage = this.meleeDamage;
+        const enemiesGroup = (this.scene as any).enemies;
+        if (enemiesGroup) {
+            this.scene.physics.add.overlap(shockwave, enemiesGroup, (sw, enemyObj: any) => {
+                if (enemyObj.takeDamage) {
+                    enemyObj.takeDamage(this.specialDamage);
+                    enemyObj.setVelocityY(-350); // "Pop up" effect for juggle combos
+                }
+            });
+        }
 
-    this.scene.tweens.add({
-      targets: hitbox,
-      alpha: 0,
-      duration: 200,
-      onComplete: () => hitbox.destroy(),
-    });
-
-    this.scene.time.delayedCall(this.meleeCooldown, () => { this.canMelee = true; });
-    return hitbox;
-  }
-
-  /**
-   * Feedback Blast – directional shockwave from the bass guitar.
-   * Damages enemies in a wide cone in front of Darko.
-   */
-  feedbackBlast(): Phaser.GameObjects.Rectangle | null {
-    if (this.specialCooldown > 0) return null;
-    this.specialCooldown = this.specialCooldownMax;
-
-    const dirMult = this.facingRight ? 1 : -1;
-    const blast = this.scene.add.rectangle(
-      this.x + (this.blastWidth / 2) * dirMult,
-      this.y,
-      this.blastWidth,
-      60,
-      0x9933ff,
-      0.5
-    );
-    blast.setStrokeStyle(3, 0x6600cc);
-    blast.setDepth(999);
-
-    this.scene.physics.add.existing(blast);
-    (blast as any).damage = this.blastDamage;
-
-    this.scene.tweens.add({
-      targets: blast,
-      scaleX: 1.5,
-      alpha: 0,
-      duration: 350,
-      onComplete: () => blast.destroy(),
-    });
-
-    this.scene.cameras.main.shake(150, 0.008);
-    eventBus.emit('special:feedbackBlast', this.x, this.y, dirMult);
-    return blast;
-  }
-
-  // ── Weapon API ──
-  equipWeapon(weapon: Weapon): void {
-    this.equippedWeapon?.destroy();
-    this.equippedWeapon = weapon;
-    eventBus.emit('weapon:equipped', weapon.getName(), weapon.getAmmo(), weapon.getMaxAmmo());
-  }
-
-  shoot(): Phaser.GameObjects.Rectangle | null {
-    if (this.equippedWeapon) {
-      const fired = this.equippedWeapon.fire(this.x, this.y, this.facingRight);
-      if (!fired && this.equippedWeapon.isEmpty()) {
-        this.equippedWeapon.destroy();
-        this.equippedWeapon = null;
-        eventBus.emit('weapon:thrown');
-      }
-      return null;
+        // Cleanup after the wave travels
+        this.scene.time.delayedCall(400, () => {
+            shockwave.destroy();
+            this.isAttacking = false;
+            this.play('darko_idle', true);
+        });
     }
-    return this.meleeSwing();
-  }
 
-  // ── Health ──
-  takeDamage(): boolean {
-    if (this.isInvulnerable) return false;
-    this.health--;
-    this.isInvulnerable = true;
+    /**
+     * FINISHER: Air Guitar Resonance Fracture
+     * Triggers at 100% SMF. Shatters the enemy's structure into dust.
+     * Mapped to CSV animation: 'darko_finish_move'
+     */
+    public executeAirGuitarFinisher() {
+        if (this.smfMeter < 100 || this.isAttacking) return;
 
-    this.torso.fillColor = 0xff0000;
-    this.scene.time.delayedCall(100, () => { this.torso.fillColor = 0x3366cc; });
-    this.scene.time.delayedCall(this.invulnerabilityMs, () => { this.isInvulnerable = false; });
+        this.isAttacking = true;
+        this.smfMeter = 0;
+        this.scene.events.emit('update-smf', this.smfMeter);
+        this.scene.events.emit('update-corruption', 100); // Triggers UI VHS Glitch
+        
+        this.play('darko_finish_move', true);
+        
+        // The Forbidden Riff from Sound CSV
+        this.scene.sound.playAudioSprite('sfx_atlas', 'forbidden-riff-final'); 
+        this.scene.cameras.main.flash(300, 255, 255, 255);
 
-    eventBus.emit(GameEvents.HEALTH_UPDATE, this.health, this.maxHealth);
-    return this.health <= 0;
-  }
+        // Massive AOE Impact Radius
+        const blastZone = this.scene.add.circle(this.x, this.y - 40, this.finisherRadius);
+        this.scene.physics.add.existing(blastZone);
 
-  getHealth(): number { return this.health; }
-  getMaxHealth(): number { return this.maxHealth; }
-  isFacingRight(): boolean { return this.facingRight; }
-  getSpecialCooldownPercent(): number {
-    return Math.max(0, this.specialCooldown / this.specialCooldownMax);
-  }
-  resetHealth(): void {
-    this.health = this.maxHealth;
-    eventBus.emit(GameEvents.HEALTH_UPDATE, this.health, this.maxHealth);
-  }
+        const enemiesGroup = (this.scene as any).enemies;
+        if (enemiesGroup) {
+            this.scene.physics.add.overlap(blastZone, enemiesGroup, (bz, enemyObj: any) => {
+                if (!enemyObj.isDead && enemyObj.takeDamage) {
+                    // Instant Kill
+                    enemyObj.takeDamage(999);
+                    
+                    // Spawn Dust/Debris Gore
+                    this.scene.events.emit('spawn-gore', {
+                        x: enemyObj.x, 
+                        y: enemyObj.y - 50, 
+                        type: 'DUST'
+                    });
+                }
+            });
+        }
+
+        // Cleanup
+        this.scene.time.delayedCall(1500, () => {
+            blastZone.destroy();
+            this.isAttacking = false;
+            this.play('darko_idle', true);
+        });
+    }
+
+    /**
+     * Override standard combat input from Player.ts to listen for Darko's specials
+     */
+    protected handleCombatInput() {
+        // Call the standard punch/shoot logic from the parent class
+        super.handleCombatInput();
+
+        const specialKey = this.scene.input.keyboard.addKey('Q');
+        const finisherKey = this.scene.input.keyboard.addKey('E');
+
+        if (Phaser.Input.Keyboard.JustDown(specialKey)) {
+            this.executeFeedbackBlast();
+        }
+
+        if (Phaser.Input.Keyboard.JustDown(finisherKey)) {
+            this.executeAirGuitarFinisher();
+        }
+    }
 }

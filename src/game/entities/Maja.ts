@@ -1,236 +1,184 @@
 import Phaser from 'phaser';
-import { eventBus, GameEvents } from '../EventBus';
-import { Weapon } from './Weapon';
+import { Player } from './Player';
 
-/**
- * Maja – The Tank. Slow, heavy damage, high HP.
- * Special: "Balkan Suplex" – grab-and-slam throw on nearby enemy.
- * Finisher: "Bor Mining Drill" – extended damage-over-time finisher.
- * Uses sprite key 'maja_atlas' (256x256 frames).
- */
-export class Maja extends Phaser.GameObjects.Container {
-  private torso: Phaser.GameObjects.Rectangle;
-  private headCircle: Phaser.GameObjects.Arc;
-
-  // Tank physics: slow but tanky
-  private speed: number = 200;
-  private health: number = 8;
-  private maxHealth: number = 8;
-  private isInvulnerable: boolean = false;
-  private invulnerabilityMs: number = 2500;
-  private facingRight: boolean = true;
-
-  private canShoot: boolean = true;
-  private shootCooldown: number = 700;
-
-  // Balkan Suplex
-  private suplexCooldown: number = 0;
-  private suplexCooldownMax: number = 8000;
-  private suplexRange: number = 60;
-  private suplexDamage: number = 6;
-
-  // Bor Mining Drill finisher
-  private drillDamage: number = 2;
-  private drillTicks: number = 5;
-  private drillInterval: number = 200;
-
-  private equippedWeapon: Weapon | null = null;
-
-  constructor(scene: Phaser.Scene, x: number, y: number) {
-    super(scene, x, y);
-
-    // Stocky torso (green)
-    this.torso = scene.add.rectangle(0, 0, 40, 44, 0x228B22);
-    this.torso.setStrokeStyle(2, 0x006400);
-    this.add(this.torso);
-
-    // Head
-    this.headCircle = scene.add.circle(0, -18, 13, 0xffcc99);
-    this.headCircle.setStrokeStyle(2, 0xcc9966);
-    this.add(this.headCircle);
-
-    // Mining helmet
-    const helmet = scene.add.rectangle(0, -26, 28, 8, 0xffcc00);
-    helmet.setStrokeStyle(1, 0xcc9900);
-    this.add(helmet);
-
-    scene.add.existing(this as unknown as Phaser.GameObjects.GameObject);
-    scene.physics.add.existing(this as unknown as Phaser.GameObjects.GameObject);
-
-    const body = (this as any).body as Phaser.Physics.Arcade.Body;
-    body.setSize(40, 44);
-    body.setCollideWorldBounds(true);
-  }
-
-  update(cursors: Phaser.Types.Input.Keyboard.CursorKeys, delta: number): void {
-    const body = (this as any).body as Phaser.Physics.Arcade.Body;
-
-    if (cursors.left?.isDown) {
-      body.setVelocityX(-this.speed);
-      this.facingRight = false;
-    } else if (cursors.right?.isDown) {
-      body.setVelocityX(this.speed);
-      this.facingRight = true;
-    } else {
-      body.setVelocityX(0);
+export class Maja extends Player {
+    constructor(scene: Phaser.Scene, x: number, y: number) {
+        // Calls the Player.ts constructor to set up the physics sprite
+        super(scene, x, y, 'maja');
+        
+        // Maja is the Tank: Highest health pool in the game
+        this.health = 150;
+        this.maxHealth = 150;
+        this.smfMeter = 0;
     }
 
-    if (cursors.up?.isDown) {
-      body.setVelocityY(-this.speed);
-    } else if (cursors.down?.isDown) {
-      body.setVelocityY(this.speed);
-    } else {
-      body.setVelocityY(0);
-    }
+    /**
+     * SPECIAL MOVE: Balkan Suplex
+     * Consumes 30% SMF. High damage grapple with a chance to break Boss defense.
+     * Mapped to CSV animation: 'maja_special_attack'
+     */
+    public executeBalkanSuplex() {
+        if (this.smfMeter < 30 || this.isAttacking) return;
 
-    this.setDepth(this.y);
+        this.isAttacking = true;
+        this.setVelocity(0, 0);
 
-    if (this.isInvulnerable) {
-      this.alpha = Math.sin(this.scene.time.now * 0.02) * 0.5 + 0.5;
-    } else {
-      this.alpha = 1;
-    }
+        // Deduct SMF immediately on cast
+        this.smfMeter -= 30;
+        this.scene.events.emit('update-smf', this.smfMeter);
 
-    if (this.suplexCooldown > 0) this.suplexCooldown -= delta;
-  }
+        // Create a short-range grab box in front of Maja
+        const xOffset = this.flipX ? -60 : 60;
+        const grabZone = this.scene.add.zone(this.x + xOffset, this.y - 40, 80, 100);
+        this.scene.physics.add.existing(grabZone);
 
-  /** Heavy punch attack. */
-  shoot(): Phaser.GameObjects.Rectangle | null {
-    if (this.equippedWeapon) {
-      const fired = this.equippedWeapon.fire(this.x, this.y, this.facingRight);
-      if (!fired && this.equippedWeapon.isEmpty()) {
-        this.equippedWeapon.destroy();
-        this.equippedWeapon = null;
-        eventBus.emit('weapon:thrown');
-      }
-      return null;
-    }
+        let grabbedEnemy: any = null;
+        
+        const enemiesGroup = (this.scene as any).enemies;
+        if (enemiesGroup) {
+            this.scene.physics.add.overlap(grabZone, enemiesGroup, (gz, enemyObj: any) => {
+                if (!grabbedEnemy && !enemyObj.isDead) {
+                    grabbedEnemy = enemyObj;
+                }
+            });
+        }
 
-    if (!this.canShoot) return null;
-    this.canShoot = false;
-
-    const dirMult = this.facingRight ? 1 : -1;
-    const fist = this.scene.add.rectangle(this.x + 30 * dirMult, this.y, 24, 24, 0xffcc99, 0.8);
-    fist.setStrokeStyle(2, 0xcc9966);
-    this.scene.physics.add.existing(fist);
-    (fist as any).damage = 2;
-
-    this.scene.tweens.add({
-      targets: fist,
-      x: fist.x + 20 * dirMult,
-      alpha: 0,
-      duration: 200,
-      onComplete: () => fist.destroy(),
-    });
-
-    this.scene.time.delayedCall(this.shootCooldown, () => { this.canShoot = true; });
-    return fist;
-  }
-
-  /**
-   * Balkan Suplex – grab an enemy within range and slam them down.
-   * Returns a grab-zone rect. Scene should check overlap and apply damage.
-   */
-  balkanSuplex(): Phaser.GameObjects.Rectangle | null {
-    if (this.suplexCooldown > 0) return null;
-    this.suplexCooldown = this.suplexCooldownMax;
-
-    const dirMult = this.facingRight ? 1 : -1;
-    const grabZone = this.scene.add.rectangle(
-      this.x + this.suplexRange * 0.5 * dirMult,
-      this.y,
-      this.suplexRange,
-      50,
-      0xff6600,
-      0.4
-    );
-    grabZone.setDepth(999);
-    this.scene.physics.add.existing(grabZone);
-    (grabZone as any).damage = this.suplexDamage;
-    (grabZone as any).isSuplex = true;
-
-    // Slam animation: quick up then down
-    this.scene.tweens.add({
-      targets: this,
-      y: this.y - 30,
-      duration: 150,
-      yoyo: true,
-      ease: 'Quad.easeOut',
-    });
-
-    this.scene.tweens.add({
-      targets: grabZone,
-      alpha: 0,
-      scaleY: 0.3,
-      duration: 400,
-      onComplete: () => grabZone.destroy(),
-    });
-
-    this.scene.cameras.main.shake(250, 0.015);
-    eventBus.emit('special:balkanSuplex', this.x, this.y);
-    return grabZone;
-  }
-
-  /**
-   * Bor Mining Drill finisher – rapid multi-hit damage-over-time on downed enemy.
-   */
-  miningDrillFinisher(enemyX: number, enemyY: number): void {
-    let tick = 0;
-    const drillTimer = this.scene.time.addEvent({
-      delay: this.drillInterval,
-      repeat: this.drillTicks - 1,
-      callback: () => {
-        tick++;
-        const spark = this.scene.add.circle(
-          enemyX + (Math.random() - 0.5) * 20,
-          enemyY + (Math.random() - 0.5) * 20,
-          4 + Math.random() * 4,
-          0xffaa00,
-          0.8
-        );
-        spark.setDepth(1000);
-        this.scene.tweens.add({
-          targets: spark,
-          alpha: 0,
-          scaleX: 2,
-          scaleY: 2,
-          duration: 150,
-          onComplete: () => spark.destroy(),
+        // Give the physics engine 1 frame (20ms) to detect the overlap
+        this.scene.time.delayedCall(20, () => {
+            grabZone.destroy();
+            
+            if (grabbedEnemy) {
+                this.executeSuplexSequence(grabbedEnemy);
+            } else {
+                // Whiffed the grab
+                this.play('maja_special_attack', true); // Or a specific miss animation if you have one
+                this.scene.time.delayedCall(400, () => { 
+                    this.isAttacking = false; 
+                    this.play('maja_idle', true);
+                });
+            }
         });
-        eventBus.emit('finisher:drillTick', enemyX, enemyY, this.drillDamage, tick);
-      },
-    });
-  }
+    }
 
-  // ── Weapon API ──
-  equipWeapon(weapon: Weapon): void {
-    this.equippedWeapon?.destroy();
-    this.equippedWeapon = weapon;
-    eventBus.emit('weapon:equipped', weapon.getName(), weapon.getAmmo(), weapon.getMaxAmmo());
-  }
+    /**
+     * The cinematic sequence that plays if the Suplex connects.
+     */
+    private executeSuplexSequence(enemy: any) {
+        this.play('maja_special_attack', true);
+        
+        // Disable enemy AI/movement while grabbed
+        if (enemy.isKnockedDown !== undefined) enemy.isKnockedDown = true;
+        
+        // Pin enemy to Maja's shoulder
+        enemy.setPosition(this.x, this.y - 80); 
+        enemy.setVelocity(0, 0);
 
-  // ── Health ──
-  takeDamage(): boolean {
-    if (this.isInvulnerable) return false;
-    this.health--;
-    this.isInvulnerable = true;
+        // Wait for the exact "slam" frame in the animation (e.g., frame 6)
+        this.on('animationupdate', (anim: Phaser.Animations.Animation, frame: Phaser.Animations.AnimationFrame) => {
+            if (frame.index === 6) { 
+                // Move enemy to the floor
+                enemy.setPosition(this.x + (this.flipX ? -80 : 80), this.y);
+                
+                if (enemy.takeDamage) enemy.takeDamage(40);
+                
+                // 10% Armor Break Logic for Bosses
+                if (enemy.enemyType === 'boss' && Phaser.Math.Between(1, 100) <= 10) {
+                    if (enemy.applyArmorBreak) enemy.applyArmorBreak();
+                }
 
-    this.torso.fillColor = 0xff0000;
-    this.scene.time.delayedCall(100, () => { this.torso.fillColor = 0x228B22; });
-    this.scene.time.delayedCall(this.invulnerabilityMs, () => { this.isInvulnerable = false; });
+                // Heavy impact juice
+                this.scene.cameras.main.shake(200, 0.02);
+                this.scene.sound.playAudioSprite('sfx_atlas', 'maja-suplex-slam');
+                
+                // Spawn debris/gore
+                this.scene.events.emit('spawn-gore', { x: enemy.x, y: enemy.y, type: 'INDUSTRIAL' });
+                
+                // Stop listening so it doesn't trigger twice
+                this.off('animationupdate'); 
+            }
+        });
 
-    eventBus.emit(GameEvents.HEALTH_UPDATE, this.health, this.maxHealth);
-    return this.health <= 0;
-  }
+        this.once('animationcomplete', () => {
+            this.isAttacking = false;
+            this.play('maja_idle', true);
+            this.off('animationupdate'); // Safety cleanup
+        });
+    }
 
-  getHealth(): number { return this.health; }
-  getMaxHealth(): number { return this.maxHealth; }
-  isFacingRight(): boolean { return this.facingRight; }
-  getSpecialCooldownPercent(): number {
-    return Math.max(0, this.suplexCooldown / this.suplexCooldownMax);
-  }
-  resetHealth(): void {
-    this.health = this.maxHealth;
-    eventBus.emit(GameEvents.HEALTH_UPDATE, this.health, this.maxHealth);
-  }
+    /**
+     * FINISHER: The Bor Mining Drill
+     * Triggers at 100% SMF. Literally deletes the enemy from the game code.
+     * Mapped to CSV animation: 'maja_finish_move'
+     */
+    public executeMiningDrill() {
+        if (this.smfMeter < 100 || this.isAttacking) return;
+
+        // Create a forward zone to catch the victim
+        const xOffset = this.flipX ? -80 : 80;
+        const drillHitbox = this.scene.add.zone(this.x + xOffset, this.y - 40, 100, 100);
+        this.scene.physics.add.existing(drillHitbox);
+
+        let grabbedEnemy: any = null;
+        const enemiesGroup = (this.scene as any).enemies;
+        
+        if (enemiesGroup) {
+            this.scene.physics.add.overlap(drillHitbox, enemiesGroup, (dh, enemyObj: any) => {
+                if (!grabbedEnemy && !enemyObj.isDead) grabbedEnemy = enemyObj;
+            });
+        }
+
+        this.scene.time.delayedCall(20, () => {
+            drillHitbox.destroy();
+            
+            if (grabbedEnemy) {
+                // Initiate the Finisher sequence
+                this.isAttacking = true;
+                this.smfMeter = 0;
+                this.scene.events.emit('update-smf', this.smfMeter);
+                this.scene.events.emit('update-corruption', 100); // VHS Glitch
+                
+                this.play('maja_finish_move', true);
+                grabbedEnemy.setVelocity(0, 0);
+                
+                this.scene.sound.playAudioSprite('sfx_atlas', 'forbidden-riff-final');
+
+                this.scene.time.delayedCall(800, () => {
+                    this.scene.cameras.main.shake(1500, 0.015);
+                    
+                    // Continual blood spray effect
+                    this.scene.time.addEvent({
+                        delay: 100,
+                        repeat: 15,
+                        callback: () => {
+                            this.scene.events.emit('spawn-blood-splatter', { x: grabbedEnemy.x, y: grabbedEnemy.y - 40 });
+                        }
+                    });
+
+                    this.scene.time.delayedCall(1500, () => {
+                        if (grabbedEnemy.takeDamage) grabbedEnemy.takeDamage(999); // Deleted
+                        this.isAttacking = false;
+                        this.play('maja_idle', true);
+                    });
+                });
+            }
+        });
+    }
+
+    /**
+     * Override standard combat input from Player.ts to listen for Maja's specials
+     */
+    protected handleCombatInput() {
+        super.handleCombatInput();
+
+        const specialKey = this.scene.input.keyboard.addKey('Q');
+        const finisherKey = this.scene.input.keyboard.addKey('E');
+
+        if (Phaser.Input.Keyboard.JustDown(specialKey)) {
+            this.executeBalkanSuplex();
+        }
+
+        if (Phaser.Input.Keyboard.JustDown(finisherKey)) {
+            this.executeMiningDrill();
+        }
+    }
 }
