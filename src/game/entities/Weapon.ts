@@ -1,142 +1,167 @@
 import Phaser from 'phaser';
-import { eventBus } from '../EventBus';
 
 export interface WeaponConfig {
-  name: string;
-  maxAmmo: number;
-  fireRate: number;        // ms between shots
-  projectileSpeed: number;
-  projectileColor: number;
-  muzzleFlashOffset: { x: number; y: number };
-  damage: number;
+    name: string;
+    maxAmmo: number;
+    fireRate: number;        // ms between shots
+    projectileSpeed: number;
+    muzzleFlashOffset: { x: number; y: number }; // Where the flash spawns relative to the player
+    damage: number;
 }
 
 export const WEAPON_PRESETS: Record<string, WeaponConfig> = {
-  pistol: {
-    name: 'Zastava M57',
-    maxAmmo: 8,
-    fireRate: 400,
-    projectileSpeed: 700,
-    projectileColor: 0xffff00,
-    muzzleFlashOffset: { x: 24, y: -8 },
-    damage: 1,
-  },
-  smg: {
-    name: 'Zastava M56',
-    maxAmmo: 32,
-    fireRate: 120,
-    projectileSpeed: 800,
-    projectileColor: 0xffaa00,
-    muzzleFlashOffset: { x: 30, y: -6 },
-    damage: 1,
-  },
-  shotgun: {
-    name: 'Pump-Action',
-    maxAmmo: 6,
-    fireRate: 800,
-    projectileSpeed: 600,
-    projectileColor: 0xff4400,
-    muzzleFlashOffset: { x: 28, y: -10 },
-    damage: 3,
-  },
+    m70_assault_rifle: {
+        name: 'M70',
+        maxAmmo: 5,           // Per your PRD: 5 uses before empty
+        fireRate: 250,        // Fast burst
+        projectileSpeed: 1200, // High velocity
+        muzzleFlashOffset: { x: 110, y: -125 }, // Aligned with the tip of the rifle in Marko's sprite
+        damage: 45,
+    },
+    zastava_shotgun: {
+        name: 'Pump-Action',
+        maxAmmo: 3,
+        fireRate: 800,
+        projectileSpeed: 800,
+        muzzleFlashOffset: { x: 100, y: -110 },
+        damage: 80, // High damage, slow fire rate
+    },
 };
 
+/**
+ * Logic handler for firearms.
+ * This class DOES NOT render a sprite itself. It tracks ammo, cooldowns, 
+ * and emits events to spawn bullets and muzzle flashes based on the Player's position.
+ */
 export class Weapon {
-  private scene: Phaser.Scene;
-  private config: WeaponConfig;
-  private currentAmmo: number;
-  private canFire: boolean = true;
-  private facingRight: boolean = true;
-  private muzzleFlash: Phaser.GameObjects.Ellipse | null = null;
+    private scene: Phaser.Scene;
+    private config: WeaponConfig;
+    private currentAmmo: number;
+    private canFire: boolean = true;
+    private muzzleFlash: Phaser.GameObjects.Sprite | null = null;
 
-  constructor(scene: Phaser.Scene, config: WeaponConfig) {
-    this.scene = scene;
-    this.config = config;
-    this.currentAmmo = config.maxAmmo;
-  }
-
-  /**
-   * Fires the weapon from the given world position.
-   * Returns true if a shot was fired, false if empty or on cooldown.
-   */
-  fire(x: number, y: number, facingRight: boolean): boolean {
-    if (!this.canFire || this.currentAmmo <= 0) {
-      return false;
+    constructor(scene: Phaser.Scene, configKey: string = 'm70_assault_rifle') {
+        this.scene = scene;
+        
+        // Fallback to M70 if an invalid key is provided
+        this.config = WEAPON_PRESETS[configKey] || WEAPON_PRESETS['m70_assault_rifle'];
+        this.currentAmmo = this.config.maxAmmo;
     }
 
-    this.facingRight = facingRight;
-    this.currentAmmo--;
-    this.canFire = false;
+    /**
+     * Attempts to fire the weapon.
+     * Returns true if successful, false if empty or on cooldown.
+     * * @param x The player's current X position
+     * @param y The player's current Y position
+     * @param facingRight Boolean indicating player direction
+     * @param isPangMode If true, shoots vertically up instead of horizontally
+     */
+    public fire(x: number, y: number, facingRight: boolean, isPangMode: boolean = false): boolean {
+        if (!this.canFire || this.currentAmmo <= 0) {
+            return false;
+        }
 
-    // Muzzle flash offset (flips with direction)
-    const dirMult = facingRight ? 1 : -1;
-    const flashX = x + this.config.muzzleFlashOffset.x * dirMult;
-    const flashY = y + this.config.muzzleFlashOffset.y;
+        this.currentAmmo--;
+        this.canFire = false;
 
-    // Show muzzle flash
-    this.spawnMuzzleFlash(flashX, flashY);
+        const dirMult = facingRight ? 1 : -1;
+        
+        // Calculate where the muzzle flash and bullet should spawn
+        let spawnX = x;
+        let spawnY = y;
 
-    // Emit event so the scene can spawn the projectile
-    eventBus.emit('spawn-projectile', {
-      x: flashX,
-      y: flashY,
-      speed: this.config.projectileSpeed,
-      directionX: dirMult,
-      color: this.config.projectileColor,
-      damage: this.config.damage,
-    });
+        if (isPangMode) {
+            // Shooting straight up
+            // You may need to tweak these offsets based on the exact Pang sprite we generated!
+            spawnX = x + (10 * dirMult); 
+            spawnY = y - 180; 
+        } else {
+            // Standard horizontal shooting
+            spawnX = x + (this.config.muzzleFlashOffset.x * dirMult);
+            spawnY = y + this.config.muzzleFlashOffset.y;
+        }
 
-    // Cooldown
-    this.scene.time.delayedCall(this.config.fireRate, () => {
-      this.canFire = true;
-    });
+        this.spawnMuzzleFlash(spawnX, spawnY, facingRight, isPangMode);
 
-    return true;
-  }
+        // Tell MainLevel.ts to physically create the bullet
+        this.scene.events.emit('spawn-projectile', {
+            x: spawnX,
+            y: spawnY,
+            direction: isPangMode ? { x: 0, y: -1 } : { x: dirMult, y: 0 },
+            speed: this.config.projectileSpeed,
+            damage: this.config.damage,
+            type: 'BULLET'
+        });
 
-  private spawnMuzzleFlash(x: number, y: number): void {
-    if (this.muzzleFlash) {
-      this.muzzleFlash.destroy();
+        // Kinetic Feedback
+        this.scene.cameras.main.shake(120, 0.01);
+
+        // Enforce Fire Rate Cooldown
+        this.scene.time.delayedCall(this.config.fireRate, () => {
+            this.canFire = true;
+        });
+
+        return true;
     }
 
-    this.muzzleFlash = this.scene.add.ellipse(x, y, 16, 10, 0xffffcc);
-    this.muzzleFlash.setAlpha(0.9);
-    this.muzzleFlash.setDepth(999);
+    /**
+     * Creates a brief, bright visual effect at the barrel tip.
+     */
+    private spawnMuzzleFlash(x: number, y: number, facingRight: boolean, isPangMode: boolean): void {
+        if (this.muzzleFlash) {
+            this.muzzleFlash.destroy();
+        }
 
-    this.scene.tweens.add({
-      targets: this.muzzleFlash,
-      alpha: 0,
-      scaleX: 2,
-      scaleY: 1.5,
-      duration: 80,
-      onComplete: () => {
+        // Assuming you have 'muzzle_flash' loaded in BootScene
+        // If not, you can replace this with a Phaser primitive (like the ellipse in the 2nd snippet)
+        this.muzzleFlash = this.scene.add.sprite(x, y, 'muzzle_flash');
+        
+        if (this.muzzleFlash.texture.key !== '__MISSING') {
+            this.muzzleFlash.setFlipX(!facingRight);
+            if (isPangMode) this.muzzleFlash.setAngle(-90);
+            
+            // Sync depth with the player
+            this.muzzleFlash.setDepth(y + 1);
+            
+            // Play animation if it exists, otherwise just fade it out
+            if (this.scene.anims.exists('flash_anim')) {
+                this.muzzleFlash.play('flash_anim');
+                this.muzzleFlash.on('animationcomplete', () => {
+                    this.muzzleFlash?.destroy();
+                    this.muzzleFlash = null;
+                });
+            } else {
+                // Fallback fade out if animation isn't registered
+                this.scene.tweens.add({
+                    targets: this.muzzleFlash,
+                    alpha: 0,
+                    duration: 80,
+                    onComplete: () => {
+                        this.muzzleFlash?.destroy();
+                        this.muzzleFlash = null;
+                    }
+                });
+            }
+        }
+    }
+
+    public isEmpty(): boolean {
+        return this.currentAmmo <= 0;
+    }
+
+    public getAmmo(): number {
+        return this.currentAmmo;
+    }
+
+    public getMaxAmmo(): number {
+        return this.config.maxAmmo;
+    }
+
+    public getName(): string {
+        return this.config.name;
+    }
+
+    public destroy(): void {
         this.muzzleFlash?.destroy();
-        this.muzzleFlash = null;
-      },
-    });
-  }
-
-  isEmpty(): boolean {
-    return this.currentAmmo <= 0;
-  }
-
-  getAmmo(): number {
-    return this.currentAmmo;
-  }
-
-  getMaxAmmo(): number {
-    return this.config.maxAmmo;
-  }
-
-  getName(): string {
-    return this.config.name;
-  }
-
-  getConfig(): WeaponConfig {
-    return this.config;
-  }
-
-  destroy(): void {
-    this.muzzleFlash?.destroy();
-  }
+    }
 }
