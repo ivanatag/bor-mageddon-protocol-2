@@ -6,12 +6,25 @@ import { MUP } from '../entities/enemies/MUP';
 import { BreakableObject, LootData } from '../entities/BreakableObject';
 import { Projectile } from '../entities/Projectile';
 
+// Import our new decoupled Systems
+import { GoreManager } from '../systems/GoreManager';
+import { CollisionManager } from '../systems/CollisionManager';
+import { AudioManager } from '../systems/AudioManager';
+import { InputService } from '../systems/InputService';
+
 export class MainLevel extends Phaser.Scene {
+    // Entities
     public player!: Marko | Darko | Maja;
     public enemies!: Phaser.Physics.Arcade.Group;
     public projectiles!: Phaser.Physics.Arcade.Group;
     public breakableObjects!: Phaser.Physics.Arcade.Group;
     public groundItems!: Phaser.Physics.Arcade.Group;
+
+    // Systems
+    public goreManager!: GoreManager;
+    public collisionManager!: CollisionManager;
+    public audioManager!: AudioManager;
+    public inputService!: InputService;
 
     constructor() {
         super({ key: 'MainLevel' });
@@ -33,7 +46,19 @@ export class MainLevel extends Phaser.Scene {
         this.groundItems = this.physics.add.group();
 
         // ==========================================
-        // 3. SPAWN THE CHOSEN CHARACTER
+        // 3. INITIALIZE MANAGERS & SYSTEMS
+        // ==========================================
+        this.goreManager = new GoreManager(this);
+        this.collisionManager = new CollisionManager(this);
+        this.audioManager = new AudioManager(this);
+        this.inputService = new InputService(this);
+
+        // Example: If you have parsed CSV data in the registry from BootScene, load it here!
+        // const soundData = this.registry.get('soundCSV') || [];
+        // this.audioManager.loadSoundData(soundData);
+
+        // ==========================================
+        // 4. SPAWN THE CHOSEN CHARACTER
         // ==========================================
         const selectedCharacter = this.registry.get('selectedCharacter') || 'marko';
         const startX = 200;
@@ -53,14 +78,14 @@ export class MainLevel extends Phaser.Scene {
         }
 
         // ==========================================
-        // 4. CAMERA SETUP
+        // 5. CAMERA SETUP
         // ==========================================
         this.cameras.main.setBounds(0, 0, 1920, 1080);
         this.cameras.main.startFollow(this.player, true, 0.08, 0.08);
         this.cameras.main.setZoom(1.1);
 
         // ==========================================
-        // 5. SPAWN LEVEL ENTITIES
+        // 6. SPAWN LEVEL ENTITIES
         // ==========================================
         const mup1 = new MUP(this, 1000, 700);
         const mup2 = new MUP(this, 1200, 800);
@@ -74,37 +99,46 @@ export class MainLevel extends Phaser.Scene {
         this.breakableObjects.add(kiosk);
 
         // ==========================================
-        // 6. COLLISION & OVERLAP LOGIC
+        // 7. COLLISION LOGIC
         // ==========================================
-        this.physics.add.overlap(this.projectiles, this.enemies, (proj: any, enemy: any) => {
-            if (proj.onImpact) proj.onImpact(enemy);
-        });
+        
+        // Let the CollisionManager handle the complex Z-depth bullet math
+        this.collisionManager.setupProjectileCollisions(this.projectiles, this.enemies);
 
-        this.physics.add.overlap(this.projectiles, this.breakableObjects, (proj: any, obj: any) => {
-            if (obj.takeDamage) obj.takeDamage(2); 
-            proj.destroy();
-        });
+        // Projectiles vs Breakable Objects (with Z-depth check!)
+        this.physics.add.overlap(
+            this.projectiles, 
+            this.breakableObjects, 
+            (proj: any, obj: any) => {
+                if (obj.takeDamage) obj.takeDamage(2); 
+                proj.destroy();
+            },
+            (proj: any, obj: any) => Math.abs(proj.y - obj.y) <= 35, // 2.5D Depth tolerance
+            this
+        );
 
-        this.physics.add.overlap(this.player, this.groundItems, (player: any, item: any) => {
-            this.collectLoot(item);
-        });
+        // Player vs Loot
+        this.physics.add.overlap(
+            this.player, 
+            this.groundItems, 
+            (player: any, item: any) => {
+                this.collectLoot(item);
+            },
+            (player: any, item: any) => Math.abs(player.y - item.y) <= 30, // Don't pick up items in the background!
+            this
+        );
 
         // ==========================================
-        // 7. GLOBAL EVENT LISTENERS
+        // 8. GLOBAL EVENT LISTENERS
         // ==========================================
         this.events.on('spawn-projectile', (data: any) => {
             const proj = new Projectile(this, data.x, data.y, data.direction, data.type);
             this.projectiles.add(proj);
         });
 
-        this.events.on('spawn-gore', (data: any) => {
-            this.spawnGoreEffect(data.x, data.y, data.type);
-        });
-
         // ==========================================
-        // 8. INITIALIZE REACT HUD DATA
+        // 9. INITIALIZE REACT HUD DATA
         // ==========================================
-        // We emit these immediately so the React HUD picks them up as soon as it mounts
         this.time.delayedCall(100, () => {
             this.events.emit('update-health', this.player.health);
             this.events.emit('update-smf', this.player.smfMeter);
@@ -112,17 +146,24 @@ export class MainLevel extends Phaser.Scene {
     }
 
     update() {
+        // 1. Poll gamepads and keyboards FIRST
+        if (this.inputService) {
+            this.inputService.update();
+        }
+
+        // 2. Update Player
         if (this.player && this.player.update) {
             this.player.update();
         }
 
+        // 3. Update Enemies
         this.enemies.getChildren().forEach((enemy: any) => {
             if (enemy.updateAI && !enemy.isDead) {
                 enemy.updateAI(this.player);
             }
         });
 
-        // Y-Depth Sorting for Belt-Scroller illusion
+        // 4. Y-Depth Sorting for the Fake 3D Illusion
         this.children.each((child: any) => {
             if (child.y && child.type !== 'Image') { 
                 child.setDepth(child.y);
@@ -137,7 +178,8 @@ export class MainLevel extends Phaser.Scene {
         if (!item.lootData) return;
         const data: LootData = item.lootData;
 
-        this.sound.playAudioSprite('sfx_atlas', 'pickup_sound');
+        // Route the pickup sound through the global event bus to our AudioManager
+        this.events.emit('play-generic-sfx', 'pickup_sound');
 
         if (data.type === 'score') {
             this.events.emit('add-score', data.value);
@@ -147,20 +189,5 @@ export class MainLevel extends Phaser.Scene {
         }
 
         item.destroy();
-    }
-
-    private spawnGoreEffect(x: number, y: number, type: string) {
-        const color = type === 'BUREAUCRATIC' ? 0xcccccc : 0xaa0000;
-        for (let i = 0; i < 5; i++) {
-            const particle = this.add.rectangle(x, y, 4, 4, color);
-            this.physics.add.existing(particle);
-            
-            const body = particle.body as Phaser.Physics.Arcade.Body;
-            body.setVelocity(Phaser.Math.Between(-150, 150), Phaser.Math.Between(-150, -50));
-            body.setAllowGravity(true);
-            body.setGravityY(400);
-            
-            this.time.delayedCall(800, () => particle.destroy());
-        }
     }
 }
