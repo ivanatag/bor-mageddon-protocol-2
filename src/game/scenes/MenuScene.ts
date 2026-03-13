@@ -1,176 +1,88 @@
 import Phaser from 'phaser';
+import { Player } from '../entities/Player';
+import { EnemyManager } from '../systems/EnemyManager';
+import { AudioManager } from '../systems/AudioManager';
+import { GoreManager } from '../systems/GoreManager';
+import { CollisionManager } from '../systems/CollisionManager';
 
-export class MenuScene extends Phaser.Scene {
-  private titleText!: Phaser.GameObjects.Text;
-  private startButton!: Phaser.GameObjects.Container;
-  private flickerTimer: number = 0;
+/**
+ * MainLevel: Orchestrates the 1993 Bor Industrial sequence.
+ * Supports Marko, Darko, and Maja with universal weapon and sound logic.
+ */
+export class MainLevel extends Phaser.Scene {
+  // Environment layers for Parallax effect
+  private sky!: Phaser.GameObjects.Image;
+  private midground!: Phaser.GameObjects.TileSprite;
+  private floor!: Phaser.GameObjects.TileSprite;
+
+  // System Managers
+  public audio!: AudioManager;
+  public gore!: GoreManager;
+  private collisionManager!: CollisionManager;
+  private enemyManager!: EnemyManager;
+
+  // Combat Entities
+  private player!: Player;
+  private enemies!: Phaser.Physics.Arcade.Group;
 
   constructor() {
-    super({ key: 'MenuScene' });
+    super({ key: 'MainLevel' }); // [cite: 2648]
   }
 
-  create(): void {
-    const { width, height } = this.cameras.main;
+  create() {
+    // 1. Systems Initialization [cite: 2649]
+    this.audio = new AudioManager(this);
+    this.gore = new GoreManager(this);
+    this.collisionManager = new CollisionManager(this);
 
-    // Dark background
-    this.add.rectangle(width / 2, height / 2, width, height, 0x0a0a0a);
+    // 2. Parallax Setup (Sky, Mid, Floor) [cite: 152, 2651]
+    // Sky is fixed, Midground moves slower than the floor for depth
+    this.sky = this.add.image(0, 0, 'sky').setOrigin(0).setScrollFactor(0);
+    this.midground = this.add.tileSprite(0, 430, 1920, 400, 'mid')
+      .setOrigin(0).setScrollFactor(0.4);
+    this.floor = this.add.tileSprite(0, 830, 1920, 250, 'floor')
+      .setOrigin(0).setScrollFactor(1);
 
-    // Red star decorations
-    for (let i = 0; i < 5; i++) {
-      const star = this.add.star(
-        100 + i * 150,
-        80,
-        5,
-        10,
-        25,
-        0xcc0000
-      );
-      star.setAlpha(0.6);
-      this.tweens.add({
-        targets: star,
-        rotation: Math.PI * 2,
-        duration: 10000 + i * 1000,
-        repeat: -1
-      });
-    }
+    // 3. World Constraints (The 250px "Road Belt") [cite: 2653]
+    // Limits movement on the Y-axis to simulate the belt-scroller perspective
+    this.physics.world.setBounds(0, 830, 5000, 250);
+    this.cameras.main.setBounds(0, 0, 5000, 1080);
 
-    // Title
-    this.titleText = this.add.text(width / 2, height / 3, 'BOR-MAGEDDON', {
-      fontFamily: 'Press Start 2P',
-      fontSize: '32px',
-      color: '#cc0000',
-      shadow: {
-        offsetX: 4,
-        offsetY: 4,
-        color: '#000000',
-        blur: 0,
-        fill: true
-      }
-    });
-    this.titleText.setOrigin(0.5);
+    // 4. Player Initialization 
+    // Pulls selected character (Marko, Darko, Maja) from the registry
+    const selectedChar = this.registry.get('selectedCharacter') || 'marko';
+    this.player = new Player(this, 200, 950, selectedChar, this.audio);
 
-    // Subtitle
-    const subtitleText = this.add.text(width / 2, height / 3 + 50, 'PROTOCOL-2', {
-      fontFamily: 'Press Start 2P',
-      fontSize: '20px',
-      color: '#fbbf24'
-    });
-    subtitleText.setOrigin(0.5);
+    // 5. Combat & Collisions [cite: 2655, 2656]
+    this.enemies = this.physics.add.group();
+    this.collisionManager.setupMeleeCollisions(this.player, this.enemies);
 
-    // Tagline
-    const tagline = this.add.text(width / 2, height / 3 + 90, 'HYPERINFLATION STABILIZATION', {
-      fontFamily: 'VT323',
-      fontSize: '24px',
-      color: '#888888'
-    });
-    tagline.setOrigin(0.5);
+    // 6. Wave Management & BGM [cite: 2657, 2658]
+    this.enemyManager = new EnemyManager(this, this.enemies, this.gore, this.audio);
+    this.enemyManager.startLevel1();
+    
+    // Follow the player with a slight camera delay for "juice"
+    this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
+    this.sound.play('bgm_industrial_1993', { loop: true, volume: 0.4 });
 
-    // Start button
-    this.createStartButton(width / 2, height / 2 + 80);
-
-    // Instructions
-    const instructions = this.add.text(width / 2, height - 100, 
-      '← → MOVE    SPACE SHOOT    ESC PAUSE', {
-      fontFamily: 'VT323',
-      fontSize: '18px',
-      color: '#666666'
-    });
-    instructions.setOrigin(0.5);
-
-    // Copyright
-    const copyright = this.add.text(width / 2, height - 40, '© 1993 SFRY ARCADE', {
-      fontFamily: 'VT323',
-      fontSize: '16px',
-      color: '#444444'
-    });
-    copyright.setOrigin(0.5);
-
-    // Leaderboard button
-    const lbText = this.add.text(width / 2, height / 2 + 140, 'LEADERBOARD (L)', {
-      fontFamily: 'VT323',
-      fontSize: '20px',
-      color: '#fbbf24'
-    });
-    lbText.setOrigin(0.5);
-    lbText.setInteractive({ useHandCursor: true });
-    lbText.on('pointerdown', () => this.scene.start('LeaderboardScene'));
-
-    // Keyboard input
-    this.input.keyboard?.on('keydown-SPACE', () => {
-      this.startGame();
-    });
-
-    this.input.keyboard?.on('keydown-ENTER', () => {
-      this.startGame();
-    });
-
-    this.input.keyboard?.on('keydown-L', () => {
-      this.scene.start('LeaderboardScene');
-    });
+    // 7. Launch UI HUD [cite: 2659]
+    this.scene.launch('UIScene');
   }
 
-  private createStartButton(x: number, y: number): void {
-    const buttonBg = this.add.rectangle(0, 0, 200, 50, 0xcc0000);
-    buttonBg.setStrokeStyle(4, 0xff0000);
+  update() {
+    // Standard logic loop updates [cite: 2660, 2661]
+    this.player.update();
+    this.enemyManager.update(this.player);
 
-    const buttonText = this.add.text(0, 0, 'START GAME', {
-      fontFamily: 'Press Start 2P',
-      fontSize: '12px',
-      color: '#ffffff'
+    // Handle Parallax Loop
+    this.midground.tilePositionX = this.cameras.main.scrollX * 0.4;
+    this.floor.tilePositionX = this.cameras.main.scrollX;
+
+    // 8. Dynamic Depth Sorting (The "Belt" System) [cite: 125, 2662]
+    // Ensures characters with higher Y-coords are drawn on top
+    this.player.setDepth(this.player.y);
+    this.enemies.getChildren().forEach(enemy => {
+      (enemy as Phaser.Physics.Arcade.Sprite).setDepth(enemy.y);
     });
-    buttonText.setOrigin(0.5);
-
-    this.startButton = this.add.container(x, y, [buttonBg, buttonText]);
-    this.startButton.setSize(200, 50);
-    this.startButton.setInteractive({ useHandCursor: true });
-
-    this.startButton.on('pointerover', () => {
-      buttonBg.setFillStyle(0xff0000);
-      this.tweens.add({
-        targets: this.startButton,
-        scale: 1.05,
-        duration: 100
-      });
-    });
-
-    this.startButton.on('pointerout', () => {
-      buttonBg.setFillStyle(0xcc0000);
-      this.tweens.add({
-        targets: this.startButton,
-        scale: 1,
-        duration: 100
-      });
-    });
-
-    this.startButton.on('pointerdown', () => {
-      this.startGame();
-    });
-
-    // Pulsing animation
-    this.tweens.add({
-      targets: this.startButton,
-      alpha: 0.8,
-      duration: 500,
-      yoyo: true,
-      repeat: -1
-    });
-  }
-
-  private startGame(): void {
-    this.cameras.main.fadeOut(500, 0, 0, 0);
-    this.time.delayedCall(500, () => {
-      this.scene.start('PangScene');
-    });
-  }
-
-  update(time: number, delta: number): void {
-    // Title flicker effect
-    this.flickerTimer += delta;
-    if (this.flickerTimer > 3000) {
-      this.titleText.setAlpha(0.7 + Math.random() * 0.3);
-      if (Math.random() > 0.9) {
-        this.flickerTimer = 0;
-      }
-    }
   }
 }

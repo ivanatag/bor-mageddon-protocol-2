@@ -1,172 +1,150 @@
 import Phaser from 'phaser';
+import { AudioManager } from '../systems/AudioManager';
+import { GoreManager } from '../systems/GoreManager';
 
-export type BanknoteType = '500B' | '50B' | '5M' | 'STAR';
+/**
+ * Enemy: Represents industrial-era threats in Bor.
+ * Handles AI movement, damage states, and Armor Break logic.
+ */
+export class Enemy extends Phaser.Physics.Arcade.Sprite {
+    public hp: number = 100;
+    public maxHealth: number = 100;
+    public enemyType: string;
+    public isDead: boolean = false;
+    public isHurt: boolean = false;
+    public isAttacking: boolean = false;
+    public isKnockedDown: boolean = false;
+    public isArmorBroken: boolean = false;
 
-export interface BanknoteConfig {
-  type: BanknoteType;
-  size: number;
-  color: number;
-  scoreValue: number;
-  splitInto: BanknoteType | null;
-  splitCount: number;
-}
+    protected audio: AudioManager;
+    protected gore: GoreManager;
+    private armorBreakTimer: Phaser.Time.TimerEvent | null = null;
 
-export const BANKNOTE_CONFIGS: Record<BanknoteType, BanknoteConfig> = {
-  '500B': {
-    type: '500B',
-    size: 60,
-    color: 0x228B22,
-    scoreValue: 500000000000,
-    splitInto: '50B',
-    splitCount: 2
-  },
-  '50B': {
-    type: '50B',
-    size: 45,
-    color: 0x32CD32,
-    scoreValue: 50000000000,
-    splitInto: '5M',
-    splitCount: 2
-  },
-  '5M': {
-    type: '5M',
-    size: 30,
-    color: 0x90EE90,
-    scoreValue: 5000000,
-    splitInto: 'STAR',
-    splitCount: 5
-  },
-  'STAR': {
-    type: 'STAR',
-    size: 15,
-    color: 0xff0000,
-    scoreValue: 1000,
-    splitInto: null,
-    splitCount: 0
-  }
-};
+    constructor(scene: Phaser.Scene, x: number, y: number, texture: string, gore: GoreManager, audio: AudioManager) {
+        super(scene, x, y, texture);
+        this.enemyType = texture;
+        this.gore = gore;
+        this.audio = audio;
 
-export class Enemy extends Phaser.GameObjects.Container {
-  private banknoteType: BanknoteType;
-  private config: BanknoteConfig;
-  private mainShape: Phaser.GameObjects.Ellipse | Phaser.GameObjects.Star;
-  private velocityX: number;
-  private velocityY: number;
-  private bounceSpeed: number = 200;
-  private isFading: boolean = false;
-  private fadeTimer: number = 0;
-  private flickerTimer: number = 0;
+        scene.add.existing(this);
+        scene.physics.add.existing(this);
 
-  constructor(scene: Phaser.Scene, x: number, y: number, type: BanknoteType, velocityX?: number) {
-    super(scene, x, y);
-
-    this.banknoteType = type;
-    this.config = BANKNOTE_CONFIGS[type];
-    this.velocityX = velocityX ?? (Math.random() > 0.5 ? 100 : -100);
-    this.velocityY = 0;
-
-    if (type === 'STAR') {
-      // Create red star
-      this.mainShape = scene.add.star(0, 0, 5, this.config.size / 2, this.config.size, this.config.color);
-      this.mainShape.setStrokeStyle(2, 0xffff00);
-    } else {
-      // Create banknote bubble
-      this.mainShape = scene.add.ellipse(0, 0, this.config.size, this.config.size * 0.7, this.config.color);
-      this.mainShape.setStrokeStyle(3, 0x006400);
-
-      // Add denomination text
-      const text = scene.add.text(0, 0, type, {
-        fontFamily: 'VT323',
-        fontSize: '12px',
-        color: '#000000'
-      });
-      text.setOrigin(0.5);
-      this.add(text);
+        // Standard 16-bit hitbox calibrated for the 250px industrial road belt [cite: 2051-2052]
+        this.setCollideWorldBounds(true);
+        this.body.setSize(80, 40); 
+        this.body.setOffset(88, 210); // Positions box at character's boots [cite: 1403-1405]
     }
 
-    this.add(this.mainShape);
-    scene.add.existing(this);
-    scene.physics.add.existing(this);
+    /**
+     * "The Stalker" AI Logic: Aligns with player's vertical lane then approaches on X-axis [cite: 706-708, 717].
+     */
+    public updateAI(player: Phaser.Physics.Arcade.Sprite) {
+        if (this.isDead || this.isHurt || this.isAttacking || this.isKnockedDown) {
+            this.setVelocity(0, 0);
+            return;
+        }
 
-    const body = this.body as Phaser.Physics.Arcade.Body;
-    body.setSize(this.config.size, this.config.size * 0.8);
-    body.setOffset(-this.config.size / 2, -this.config.size * 0.4);
-  }
+        const distanceX = player.x - this.x;
+        const distanceY = player.y - this.y;
+        const absDistX = Math.abs(distanceX);
+        const absDistY = Math.abs(distanceY);
 
-  update(delta: number): void {
-    const dt = delta / 1000;
-    const body = this.body as Phaser.Physics.Arcade.Body;
+        // 1. Lane Alignment (Z-axis/Y movement) [cite: 718-719]
+        if (absDistY > 15) {
+            this.setVelocityY(distanceY > 0 ? 100 : -100);
+        } else {
+            this.setVelocityY(0);
+        }
 
-    // Apply gravity
-    this.velocityY += 300 * dt;
-
-    // Bounce off floor
-    if (this.y >= this.scene.scale.height - 80) {
-      this.velocityY = -this.bounceSpeed - Math.random() * 50;
-      this.y = this.scene.scale.height - 80;
+        // 2. Approach (X-axis movement) [cite: 723-725]
+        if (absDistX > 180) {
+            this.setVelocityX(distanceX > 0 ? 120 : -120);
+            this.setFlipX(distanceX < 0);
+            this.play(`${this.enemyType}_walk`, true);
+        } 
+        // 3. Attack Trigger [cite: 729-734]
+        else if (absDistX <= 180 && absDistY <= 20) {
+            this.setVelocityX(0);
+            this.executeEnemyAttack();
+        } else {
+            this.setVelocityX(0);
+            this.play(`${this.characterName}_idle`, true);
+        }
     }
 
-    // Bounce off walls
-    if (this.x <= this.config.size / 2) {
-      this.velocityX = Math.abs(this.velocityX);
-      this.x = this.config.size / 2;
-    } else if (this.x >= this.scene.scale.width - this.config.size / 2) {
-      this.velocityX = -Math.abs(this.velocityX);
-      this.x = this.scene.scale.width - this.config.size / 2;
+    protected executeEnemyAttack() {
+        // Overridden by specific enemy classes (e.g., Dizel knife slash) [cite: 2109]
     }
 
-    // Apply velocity
-    this.x += this.velocityX * dt;
-    this.y += this.velocityY * dt;
+    /**
+     * Damage Logic: Accounts for Armor Break multipliers and gore feedback [cite: 2057-2058].
+     */
+    public takeDamage(amount: number) {
+        if (this.isDead) return;
 
-    // Handle star fading
-    if (this.banknoteType === 'STAR' && this.isFading) {
-      this.fadeTimer += dt;
-      this.flickerTimer += dt;
+        // Apply 1.5x multiplier if armor is broken (triggered by Maja) [cite: 1017, 1136-1137].
+        const finalDamage = this.isArmorBroken ? Math.floor(amount * 1.5) : amount;
+        this.hp -= finalDamage;
+        
+        this.isHurt = true;
+        this.setTint(this.isArmorBroken ? 0xB87333 : 0xff0000); // Maintain Copper tint if broken
 
-      // Flicker effect
-      if (this.flickerTimer > 0.1) {
-        this.flickerTimer = 0;
-        this.mainShape.setAlpha(this.mainShape.alpha > 0.5 ? 0.3 : 1);
-      }
+        // Audio grunts and screen shake juice [cite: 2060, 2193]
+        this.audio.playMaleDamageGrunt();
+        this.scene.cameras.main.shake(100, 0.005);
 
-      // Complete fade after 2 seconds
-      if (this.fadeTimer >= 2) {
-        this.destroy();
-      }
+        // Spawn "Bureaucratic Gore" particles 
+        this.scene.events.emit('spawn-gore', this.x, this.y - 100, 'BUREAUCRATIC', 'HIT');
+
+        this.scene.time.delayedCall(200, () => {
+            if (!this.isDead) {
+                this.isHurt = false;
+                if (!this.isArmorBroken) this.clearTint();
+            }
+        });
+
+        if (this.hp <= 0) this.die();
     }
-  }
 
-  startFade(): void {
-    if (this.banknoteType === 'STAR') {
-      this.isFading = true;
+    /**
+     * Applies Armor Break state: Reduces defense and tints sprite Copper/Rust[cite: 1017].
+     */
+    public applyArmorBreak() {
+        if (this.isDead) return;
+
+        this.isArmorBroken = true;
+        this.setTint(0xB87333); // Visual feedback for exposed armor [cite: 1843]
+        
+        // Impact FX
+        this.scene.events.emit('spawn-industrial-debris', { x: this.x, y: this.y - 100 });
+
+        // Auto-recovery after 5 seconds
+        if (this.armorBreakTimer) this.armorBreakTimer.remove();
+        this.armorBreakTimer = this.scene.time.delayedCall(5000, () => {
+            this.isArmorBroken = false;
+            if (!this.isDead) this.clearTint();
+        });
     }
-  }
 
-  getBanknoteType(): BanknoteType {
-    return this.banknoteType;
-  }
+    protected die() {
+        this.isDead = true;
+        this.setVelocity(0, 0);
+        this.body.enable = false; // Prevents further collisions [cite: 2066]
 
-  getConfig(): BanknoteConfig {
-    return this.config;
-  }
+        // Final "Fatality" Gore burst [cite: 805, 1348]
+        this.scene.events.emit('spawn-gore', this.x, this.y - 100, 'BUREAUCRATIC', 'FINISHER');
+        this.audio.playRandomSFX(['Break_1', 'Break_2', 'Break_3'], 0.8);
+        
+        this.play(`${this.enemyType}_die`);
 
-  getVelocityX(): number {
-    return this.velocityX;
-  }
-
-  split(): { type: BanknoteType; velocityX: number }[] {
-    if (!this.config.splitInto) return [];
-
-    const result: { type: BanknoteType; velocityX: number }[] = [];
-    for (let i = 0; i < this.config.splitCount; i++) {
-      const angle = (i / this.config.splitCount) * Math.PI - Math.PI / 2;
-      const vx = Math.cos(angle) * 150;
-      result.push({
-        type: this.config.splitInto,
-        velocityX: vx
-      });
+        // Sinking Archive Tween: Body sinks into the industrial floor runoff [cite: 1349-1356, 1474-1476]
+        this.scene.tweens.add({
+            targets: this,
+            alpha: 0,
+            y: this.y + 60,
+            duration: 3500,
+            delay: 2000,
+            onComplete: () => this.destroy()
+        });
     }
-    return result;
-  }
 }
