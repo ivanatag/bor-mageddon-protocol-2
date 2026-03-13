@@ -1,91 +1,63 @@
 import Phaser from 'phaser';
+import { Projectile } from '../entities/Projectile';
+import { Enemy } from '../entities/Enemy';
 
 /**
- * CollisionManager – Centralizes collision detection, belt depth-sorting,
- * and boss critical-zone hit detection.
+ * CollisionManager: Handles precision hit detection between projectiles and entities.
+ * Orchestrates the relationship between the Player's firearms and the Enemy waves.
  */
 export class CollisionManager {
-  private scene: Phaser.Scene;
+    private scene: Phaser.Scene;
 
-  constructor(scene: Phaser.Scene) {
-    this.scene = scene;
-  }
-
-  /**
-   * Belt depth-sort: set depth of all game objects based on Y position.
-   * Call once per frame for all sortable entities.
-   */
-  depthSort(entities: Phaser.GameObjects.GameObject[]): void {
-    for (const entity of entities) {
-      if ('y' in entity && 'setDepth' in entity) {
-        (entity as any).setDepth((entity as any).y);
-      }
+    constructor(scene: Phaser.Scene) {
+        this.scene = scene; // [cite: 2218]
     }
-  }
 
-  /**
-   * Check if a projectile overlaps with a boss's head hitbox (critical zone).
-   * Returns 'head' | 'torso' | null.
-   */
-  checkBossCriticalZone(
-    projectile: Phaser.GameObjects.GameObject,
-    headHitbox: Phaser.GameObjects.Zone,
-    torsoHitbox: Phaser.GameObjects.Zone
-  ): 'head' | 'torso' | null {
-    const pBounds = (projectile as any).getBounds?.();
-    if (!pBounds) return null;
+    /**
+     * Sets up the physics overlap for ranged combat.
+     * Maps the 'bullet.png' or 'throwable_weapon' to the enemy group.
+     */
+    public setupProjectileCollisions(projectiles: Phaser.Physics.Arcade.Group, enemies: Phaser.Physics.Arcade.Group) {
+        // [cite: 668, 1660, 2219]
+        this.scene.physics.add.overlap(
+            projectiles,
+            enemies,
+            (proj, target) => {
+                const projectile = proj as Projectile;
+                const enemy = target as Enemy;
 
-    const headBounds = headHitbox.getBounds();
-    const torsoBounds = torsoHitbox.getBounds();
+                // Ignore hits if the enemy is already in a dead or invulnerable state
+                if (enemy.isDead || (enemy as any).isInvulnerable) return; // [cite: 1614, 1628, 2037]
 
-    if (Phaser.Geom.Rectangle.Overlaps(pBounds, headBounds)) {
-      return 'head';
+                // Trigger the projectile's impact logic (Gore, Damage, and Sound)
+                projectile.onImpact(enemy); // [cite: 1664, 1674, 2125]
+            },
+            undefined,
+            this
+        );
     }
-    if (Phaser.Geom.Rectangle.Overlaps(pBounds, torsoBounds)) {
-      return 'torso';
+
+    /**
+     * Specialized logic for Boss Multi-Hitboxes (Slobodan CEO / Mecha-Tito).
+     * Handles 2x/3x damage multipliers for headshots.
+     */
+    public setupBossCollisions(projectiles: Phaser.Physics.Arcade.Group, boss: any) {
+        // Headshot Logic: 3x Damage for Slobodan mustache area [cite: 1149, 1295, 1729, 2219]
+        if (boss.headHitbox) {
+            this.scene.physics.add.overlap(projectiles, boss.headHitbox, (proj, head) => {
+                const projectile = proj as Projectile;
+                boss.takeDamageFromZone(projectile.getDamage(), 'head'); // [cite: 1291, 1548, 1759]
+                projectile.onImpact(boss);
+            });
+        }
+
+        // Torso Logic: Standard Damage [cite: 1186, 1731, 2220]
+        if (boss.torsoHitbox) {
+            this.scene.physics.add.overlap(projectiles, boss.torsoHitbox, (proj, torso) => {
+                const projectile = proj as Projectile;
+                boss.takeDamageFromZone(projectile.getDamage(), 'torso'); // [cite: 1548, 1708]
+                projectile.onImpact(boss);
+            });
+        }
     }
-    return null;
-  }
-
-  /**
-   * Register arcade overlap between two groups/objects with a callback.
-   * Convenience wrapper for the scene's physics system.
-   */
-  addOverlap(
-    objectA: Phaser.GameObjects.GameObject | Phaser.GameObjects.Group,
-    objectB: Phaser.GameObjects.GameObject | Phaser.GameObjects.Group,
-    callback: Phaser.Types.Physics.Arcade.ArcadePhysicsCallback,
-    context?: any
-  ): Phaser.Physics.Arcade.Collider {
-    return this.scene.physics.add.overlap(objectA, objectB, callback, undefined, context);
-  }
-
-  /**
-   * Register arcade collider between two groups/objects.
-   */
-  addCollider(
-    objectA: Phaser.GameObjects.GameObject | Phaser.GameObjects.Group,
-    objectB: Phaser.GameObjects.GameObject | Phaser.GameObjects.Group,
-    callback?: Phaser.Types.Physics.Arcade.ArcadePhysicsCallback,
-    context?: any
-  ): Phaser.Physics.Arcade.Collider {
-    return this.scene.physics.add.collider(objectA, objectB, callback, undefined, context);
-  }
-
-  /**
-   * Check if point is within a circular AoE zone (for Wall of Death, etc.).
-   */
-  isInAoE(targetX: number, targetY: number, centerX: number, centerY: number, radius: number): boolean {
-    const dx = targetX - centerX;
-    const dy = targetY - centerY;
-    return (dx * dx + dy * dy) <= (radius * radius);
-  }
-
-  /**
-   * Z-axis precision check: only register hit if entities are on similar Y belt.
-   * Belt tolerance = how many pixels of Y difference is acceptable for a "same lane" hit.
-   */
-  isSameBeltLane(entityAY: number, entityBY: number, tolerance: number = 30): boolean {
-    return Math.abs(entityAY - entityBY) <= tolerance;
-  }
 }
