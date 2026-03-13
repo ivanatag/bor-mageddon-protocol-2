@@ -2,16 +2,20 @@ import React, { useState } from 'react';
 import { CharacterSelector } from './components/CharacterSelector';
 import { GameContainer } from './components/GameContainer';
 import { SettingsMenu, ControlsHUD } from './components/SettingsMenu';
+import { WorldMap } from './components/WorldMap';
 
 export default function App() {
+  // --- Core Game Flow State ---
   const [gameState, setGameState] = useState<'MENU' | 'PLAYING'>('MENU');
   const [selectedCharacter, setSelectedCharacter] = useState<string | null>(null);
   
-  // Settings & Polish State
+  // --- UI Overlays & Polish State ---
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isMapOpen, setIsMapOpen] = useState(false);
   const [crtEnabled, setCrtEnabled] = useState(true);
   const [volume, setVolume] = useState(0.5);
 
+  // Triggered by the 3D Character Selector
   const handleCharacterSelect = (character: string) => {
     setSelectedCharacter(character);
     setGameState('PLAYING');
@@ -20,25 +24,40 @@ export default function App() {
   return (
     <div className="w-screen h-screen bg-black overflow-hidden relative">
       
-      {/* Settings Gear / Button (Always accessible) */}
-      <button 
-        onClick={() => setIsSettingsOpen(true)}
-        className="absolute top-4 right-4 z-50 text-white font-mono text-xs border border-zinc-600 px-3 py-1 bg-black/50 hover:bg-white hover:text-black transition-colors"
-      >
-        [SETTINGS]
-      </button>
+      {/* Top Right Navigation UI (Always accessible, Map only when playing) */}
+      <div className="absolute top-4 right-4 z-50 flex gap-3">
+        {gameState === 'PLAYING' && (
+          <button 
+            onClick={() => setIsMapOpen(true)}
+            className="text-[#b87333] font-mono text-xs border border-[#b87333] px-3 py-1 bg-black/80 hover:bg-[#b87333] hover:text-black transition-colors uppercase tracking-widest"
+          >
+            [OPERATIVNA MAPA]
+          </button>
+        )}
+        
+        <button 
+          onClick={() => setIsSettingsOpen(true)}
+          className="text-white font-mono text-xs border border-zinc-600 px-3 py-1 bg-black/80 hover:bg-white hover:text-black transition-colors uppercase tracking-widest"
+        >
+          [SETTINGS]
+        </button>
+      </div>
 
-      {/* Main Game State Routing */}
-      {gameState === 'MENU' && <CharacterSelector onSelect={handleCharacterSelect} />}
+      {/* --- MAIN GAME STATE ROUTING --- */}
+      {gameState === 'MENU' && (
+        <CharacterSelector onSelect={handleCharacterSelect} />
+      )}
       
       {gameState === 'PLAYING' && selectedCharacter && (
         <GameContainer selectedCharacter={selectedCharacter} />
       )}
 
-      {/* Permanent Controls HUD (Only visible during gameplay so the player remembers how to Jump/Attack) */}
+      {/* --- HUD & OVERLAYS --- */}
+      
+      {/* Permanent Controls HUD (Only visible during gameplay) */}
       {gameState === 'PLAYING' && <ControlsHUD />}
 
-      {/* Settings Modal Component */}
+      {/* Settings Modal */}
       <SettingsMenu 
         isOpen={isSettingsOpen} 
         onClose={() => setIsSettingsOpen(false)} 
@@ -48,7 +67,12 @@ export default function App() {
         onVolumeChange={setVolume}
       />
 
-      {/* 1993 CRT Scanline Overlay */}
+      {/* World Map / Level Selector Modal */}
+      {isMapOpen && (
+        <WorldMap onClose={() => setIsMapOpen(false)} />
+      )}
+
+      {/* 1993 CRT Scanline & Phosphor Overlay */}
       {crtEnabled && (
         <div 
           className="pointer-events-none absolute inset-0 z-40 mix-blend-overlay opacity-30"
