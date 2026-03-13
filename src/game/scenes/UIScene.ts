@@ -7,18 +7,24 @@ import Phaser from 'phaser';
 export class UIScene extends Phaser.Scene {
     private ammoText!: Phaser.GameObjects.Text;
     private healthBar!: Phaser.GameObjects.Graphics;
+    private smfBar!: Phaser.GameObjects.Graphics;
     private scoreText!: Phaser.GameObjects.Text;
+    
     private currentScore: number = 0;
+    private maxHealth!: number;
 
     constructor() {
-        // We don't use active: true here. It's safer to let MainLevel launch it.
         super({ key: 'UIScene' });
     }
 
     create() {
         // 1. Fetch Dynamic Data
-        // Read which character the user clicked in the 3D React Menu
         const characterName = (this.registry.get('selectedCharacter') || 'MARKO').toUpperCase();
+
+        // Dynamically set Max Health so the background bar scales correctly
+        if (characterName === 'MAJA') this.maxHealth = 150;
+        else if (characterName === 'DARKO') this.maxHealth = 90;
+        else this.maxHealth = 100; // Marko default
 
         // 2. Label Styles
         const labelStyle = { 
@@ -35,26 +41,33 @@ export class UIScene extends Phaser.Scene {
             shadow: { offsetX: 1, offsetY: 1, color: '#000000', fill: true }
         };
 
-        // 3. Player Info (Top Left)
+        // 3. Player Info
         this.add.text(20, 20, `${characterName} - 1993`, labelStyle);
-        
-        // 4. Ammo Counter (Top Left, under name)
-        // Defaulting to 5/5 since that's the M70 max ammo we set in Weapon.ts
         this.ammoText = this.add.text(20, 55, 'AMMO: 5/5', infoStyle);
         
-        // 5. Health Bar Graphics
+        // 4. Initialize Graphics Bars
         this.healthBar = this.add.graphics();
-        this.drawHealthBar(100); // Initial dummy draw
-
-        // 6. Score Tracking (Top Right)
-        // Positioned at 1900 to sit nicely in the top right corner of your 1920x1080 screen
+        this.smfBar = this.add.graphics();
+        
+        // 5. Score Tracking
         this.scoreText = this.add.text(1900, 20, 'DINARS: 0', labelStyle).setOrigin(1, 0);
 
         // ==========================================
-        // EVENT LISTENERS
+        // INITIAL SYNC & EVENT LISTENERS
         // ==========================================
-        const mainLevel = this.scene.get('MainLevel');
+        const mainLevel = this.scene.get('MainLevel') as any;
 
+        // Sync initial state directly from the player if they already exist
+        if (mainLevel && mainLevel.player) {
+            this.drawHealthBar(mainLevel.player.health);
+            this.drawSMFBar(mainLevel.player.smfMeter);
+            this.ammoText.setText(`AMMO: ${mainLevel.player.ammo}/5`);
+        } else {
+            this.drawHealthBar(this.maxHealth);
+            this.drawSMFBar(0);
+        }
+
+        // Listen for live updates
         mainLevel.events.on('update-ammo', (current: number, max: number) => {
             this.ammoText.setText(`AMMO: ${current}/${max}`);
         });
@@ -64,8 +77,7 @@ export class UIScene extends Phaser.Scene {
         });
 
         mainLevel.events.on('update-smf', (smf: number) => {
-            // Optional: You can draw a blue SMF bar here right below the health bar!
-            // E.g., this.drawSMFBar(smf);
+            this.drawSMFBar(smf);
         });
 
         mainLevel.events.on('add-score', (amount: number) => {
@@ -83,8 +95,6 @@ export class UIScene extends Phaser.Scene {
         });
 
         // CRITICAL MEMORY LEAK PREVENTION:
-        // When the UI Scene shuts down (like if you die and restart), 
-        // we must detach these listeners so they don't fire twice.
         this.events.on('shutdown', () => {
             mainLevel.events.off('update-ammo');
             mainLevel.events.off('update-health');
@@ -99,18 +109,37 @@ export class UIScene extends Phaser.Scene {
     private drawHealthBar(health: number) {
         this.healthBar.clear();
         
-        // Background (Dark Red/Black)
+        // Background (Dark Red/Black) scales dynamically based on character's max health!
         this.healthBar.fillStyle(0x330000, 0.8);
-        this.healthBar.fillRect(20, 90, 300, 20); // Scaled up to fit a 150HP Tank like Maja
+        this.healthBar.fillRect(20, 90, this.maxHealth * 2, 20); 
         
-        // Prevent drawing negative health widths
         const currentHealth = Math.max(0, health);
-
-        // Foreground (Green normally, Bright Red if under 30 HP)
         const barColor = currentHealth > 30 ? 0x00ff00 : 0xff0000;
-        this.healthBar.fillStyle(barColor, 1);
         
-        // Multiply by 2 so 100 HP equals 200 pixels wide on the screen
+        this.healthBar.fillStyle(barColor, 1);
         this.healthBar.fillRect(20, 90, currentHealth * 2, 20);
+    }
+
+    /**
+     * Draws the blue Special Move / Finisher (SMF) Meter right below the health bar.
+     * Max SMF is always 100 for all characters.
+     */
+    private drawSMFBar(smf: number) {
+        this.smfBar.clear();
+        
+        // Background (Dark Blue) - Matches the width of the health bar for UI symmetry
+        this.smfBar.fillStyle(0x000033, 0.8);
+        this.smfBar.fillRect(20, 115, this.maxHealth * 2, 10); 
+        
+        const currentSMF = Math.max(0, Math.min(100, smf));
+        
+        // Bright cyan when full (ready for Finisher), standard blue otherwise
+        const barColor = currentSMF >= 100 ? 0x00ffff : 0x0088ff;
+        
+        this.smfBar.fillStyle(barColor, 1);
+        
+        // Calculate the width as a percentage of the total background width
+        const fillWidth = (currentSMF / 100) * (this.maxHealth * 2);
+        this.smfBar.fillRect(20, 115, fillWidth, 10);
     }
 }
