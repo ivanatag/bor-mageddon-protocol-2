@@ -1,41 +1,32 @@
 import Phaser from 'phaser';
-import { BootScene } from './game/scenes/BootScene';
-import { MainLevel } from './game/scenes/MainLevel';
-import { UIScene } from './game/scenes/UIScene';
+import { BootScene } from './scenes/BootScene';
+import { MainLevel } from './scenes/MainLevel';
+import { UIScene } from './scenes/UIScene';
+// import { EndingScene } from './scenes/EndingScene'; // Uncomment if you have this file ready!
 
 /**
  * BOR-MAGEDDON 1993: Core Engine Configuration
- * Industrial Belt-Scroller System Initialized.
+ * Industrial Belt-Scroller System Configured.
  */
-const config: Phaser.Types.Core.GameConfig = {
+export const GameConfig: Phaser.Types.Core.GameConfig = {
     type: Phaser.AUTO,
     width: 1920,
     height: 1080,
-    parent: 'game-container',
+    // Note: The 'parent' property is intentionally omitted here.
+    // React's GameContainer.tsx will dynamically assign the parent div when it mounts.
     physics: {
         default: 'arcade',
         arcade: {
-            gravity: { x: 0, y: 0 },
-            debug: false
+            gravity: { x: 0, y: 0 }, // Y gravity is 0 for the top-down/belt-scroller perspective
+            debug: false             // Change to true if you need to see hitboxes
         }
     },
     scale: {
-        mode: Phaser.Scale.FIT,
+        mode: Phaser.Scale.FIT, // Ensures the 1080p game scales correctly on smaller monitors
         autoCenter: Phaser.Scale.CENTER_BOTH
     },
-    scene: [BootScene, MainLevel, UIScene],
-    pixelArt: true,
-    roundPixels: true,
-    backgroundColor: '#000000'
+    scene: [BootScene, MainLevel, UIScene], // Add EndingScene here when it's ready
+    pixelArt: true,      // Crucial for 16-bit Yugoslav sprites; prevents blurriness
+    roundPixels: true,   // Prevents sub-pixel rendering tearing on moving sprites
+    backgroundColor: '#050505' // Base industrial void behind the parallax layers
 };
-
-// 1. Initialize the Game Engine
-const game = new Phaser.Game(config);
-
-// 2. Expose the Game to the Global Window Object
-declare global {
-    interface Window {
-        phaserGame: Phaser.Game;
-    }
-}
-window.phaserGame = game;
