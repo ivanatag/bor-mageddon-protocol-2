@@ -1,9 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import Phaser from 'phaser';
-
-// Import your Phaser scenes
-import { BootScene } from '../game/scenes/BootScene';
-import { MainLevel } from '../game/scenes/MainLevel';
+import { GameConfig } from '../game/main';
 
 interface GameContainerProps {
   selectedCharacter: string;
@@ -13,31 +10,24 @@ export const GameContainer: React.FC<GameContainerProps> = ({ selectedCharacter 
   const gameRef = useRef<Phaser.Game | null>(null);
 
   useEffect(() => {
+    // Prevent React Strict Mode from booting two copies of the game at the same time
     if (gameRef.current) return;
 
-    const config: Phaser.Types.Core.GameConfig = {
-      type: Phaser.AUTO,
-      parent: 'phaser-container',
-      width: 1920,
-      height: 1080,
-      pixelArt: true,
-      physics: {
-        default: 'arcade',
-        arcade: { gravity: { y: 0, x: 0 }, debug: false }
-      },
-      scale: {
-        mode: Phaser.Scale.FIT,
-        autoCenter: Phaser.Scale.CENTER_BOTH
-      },
-      scene: [BootScene, MainLevel]
+    // Merge the imported settings with the specific HTML div ID we are creating below
+    const finalConfig: Phaser.Types.Core.GameConfig = {
+      ...GameConfig,
+      parent: 'phaser-container'
     };
 
-    const game = new Phaser.Game(config);
+    // Boot the Phaser Engine
+    const game = new Phaser.Game(finalConfig);
     gameRef.current = game;
 
-    // Pass the character to Phaser's registry
+    // Pass the chosen character into Phaser's global memory (Registry)
+    // MainLevel.ts will read this exact string to decide who to spawn!
     game.registry.set('selectedCharacter', selectedCharacter.toLowerCase());
 
+    // Cleanup function: If the user leaves this screen, safely kill the game engine
     return () => {
       if (gameRef.current) {
         gameRef.current.destroy(true);
