@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 
 // ==========================================
 // 1. PERMANENT CONTROLS HUD (Corner Overlay)
@@ -22,7 +22,6 @@ export const ControlsHUD: React.FC = () => {
   );
 };
 
-
 // ==========================================
 // 2. SETTINGS MODAL
 // ==========================================
@@ -43,13 +42,52 @@ export const SettingsMenu: React.FC<SettingsMenuProps> = ({
   volume,
   onVolumeChange
 }) => {
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  // 1. PAUSE THE GAME WHEN OPEN & LISTEN FOR ESCAPE KEY
+  useEffect(() => {
+    // Handle Escape Key
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isOpen) onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+
+    // Pause/Resume Phaser Engine
+    if (window.phaserGame) {
+      if (isOpen) {
+        // Pausing MainLevel halts movement, AI, and physics
+        window.phaserGame.scene.pause('MainLevel'); 
+      } else {
+        window.phaserGame.scene.resume('MainLevel');
+      }
+    }
+
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
+  // Track fullscreen changes natively
+  useEffect(() => {
+    const onFullscreenChange = () => setIsFullscreen(!!document.fullscreenElement);
+    document.addEventListener('fullscreenchange', onFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', onFullscreenChange);
+  }, []);
+
   if (!isOpen) return null;
 
-  // Sends volume data directly to the Phaser engine if it is running
+  // Sends volume data directly to the Phaser engine
   const handleVolumeChange = (newVolume: number) => {
     onVolumeChange(newVolume);
     if (window.phaserGame) {
       window.phaserGame.sound.volume = newVolume;
+    }
+  };
+
+  // Browser Fullscreen API
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch((err) => console.log(err));
+    } else {
+      document.exitFullscreen();
     }
   };
 
@@ -61,6 +99,7 @@ export const SettingsMenu: React.FC<SettingsMenuProps> = ({
         <button 
           onClick={onClose}
           className="absolute top-3 right-4 text-zinc-500 hover:text-red-500 font-bold text-xl cursor-pointer"
+          title="Close (ESC)"
         >
           X
         </button>
@@ -78,7 +117,6 @@ export const SettingsMenu: React.FC<SettingsMenuProps> = ({
               <p className="text-zinc-500 text-xs">Scanline & Phosphor overlay</p>
             </div>
             
-            {/* Custom Native Toggle Switch */}
             <label className="relative inline-flex items-center cursor-pointer">
               <input 
                 type="checkbox" 
@@ -88,6 +126,20 @@ export const SettingsMenu: React.FC<SettingsMenuProps> = ({
               />
               <div className="w-11 h-6 bg-zinc-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#39ff14]"></div>
             </label>
+          </div>
+
+          {/* Fullscreen Toggle */}
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-[#b87333] block uppercase text-sm font-bold">FULLSCREEN</h3>
+              <p className="text-zinc-500 text-xs">Maximize display</p>
+            </div>
+            <button 
+              onClick={toggleFullscreen}
+              className="text-xs bg-zinc-800 border border-zinc-600 px-3 py-1 text-white hover:bg-zinc-700"
+            >
+              {isFullscreen ? 'EXIT' : 'ENTER'}
+            </button>
           </div>
 
           {/* Master Volume Slider */}
