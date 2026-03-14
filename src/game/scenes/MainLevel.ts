@@ -1,12 +1,16 @@
 import Phaser from 'phaser';
+
+// Players
 import { Marko } from '../entities/Marko';
 import { Darko } from '../entities/Darko';
 import { Maja } from '../entities/Maja';
 
-// Enemies
+// 1993 Enemy Roster
 import { MUP } from '../entities/enemies/MUP';
 import { Dizel } from '../entities/enemies/Dizel';
 import { Dizelcic } from '../entities/enemies/Dizelcic';
+import { Miner } from '../entities/enemies/Miner';
+import { SlobodanCEO } from '../entities/enemies/SlobodanCEO';
 
 // Objects & Projectiles
 import { BreakableObject, LootData } from '../entities/BreakableObject';
@@ -40,7 +44,7 @@ export class MainLevel extends Phaser.Scene {
         // ==========================================
         // 1. WORLD SETUP
         // ==========================================
-        this.physics.world.setBounds(0, 0, 1920, 1080);
+        this.physics.world.setBounds(0, 0, 2400, 1080); // Expanded bounds for the boss fight
         this.add.image(0, 0, 'part1_sky').setOrigin(0, 0);
 
         // ==========================================
@@ -82,7 +86,7 @@ export class MainLevel extends Phaser.Scene {
         // ==========================================
         // 5. CAMERA SETUP
         // ==========================================
-        this.cameras.main.setBounds(0, 0, 1920, 1080);
+        this.cameras.main.setBounds(0, 0, 2400, 1080);
         this.cameras.main.startFollow(this.player, true, 0.08, 0.08);
         this.cameras.main.setZoom(1.1);
 
@@ -97,9 +101,15 @@ export class MainLevel extends Phaser.Scene {
         // Fast Tracksuit Thugs
         const dizel1 = new Dizel(this, 1400, 750);
         const dizelcic1 = new Dizelcic(this, 1500, 680);
+
+        // Heavy Copper Miner Tank
+        const miner1 = new Miner(this, 1600, 720);
+
+        // THE ARCHITECT OF INFLATION (Level 1 Boss)
+        const boss = new SlobodanCEO(this, 2000, 750);
         
-        // Register all enemies into the physics group
-        this.enemies.addMultiple([mup1, mup2, dizel1, dizelcic1]);
+        // Register standard enemies into the physics group
+        this.enemies.addMultiple([mup1, mup2, dizel1, dizelcic1, miner1, boss]);
 
         // Breakable Loot Kiosk
         const possibleLoot: LootData[] = [
@@ -113,10 +123,13 @@ export class MainLevel extends Phaser.Scene {
         // 7. COLLISION LOGIC
         // ==========================================
         
-        // Let the CollisionManager handle the complex Z-depth bullet math
+        // A. Standard Enemies Z-depth projectile logic
         this.collisionManager.setupProjectileCollisions(this.projectiles, this.enemies);
 
-        // Projectiles vs Breakable Objects (with Z-depth check!)
+        // B. Specialized Boss Hitboxes (Headshot multiplier logic)
+        this.collisionManager.setupBossCollisions(this.projectiles, boss);
+
+        // C. Projectiles vs Breakable Objects (with Z-depth check!)
         this.physics.add.overlap(
             this.projectiles, 
             this.breakableObjects, 
@@ -128,7 +141,7 @@ export class MainLevel extends Phaser.Scene {
             this
         );
 
-        // Player vs Loot (Picking up items)
+        // D. Player vs Loot (Picking up items)
         this.physics.add.overlap(
             this.player, 
             this.groundItems, 
@@ -142,9 +155,32 @@ export class MainLevel extends Phaser.Scene {
         // ==========================================
         // 8. GLOBAL EVENT LISTENERS
         // ==========================================
+        
+        // Handle gunfire from the player
         this.events.on('spawn-projectile', (data: any) => {
             const proj = new Projectile(this, data.x, data.y, data.direction, data.type);
             this.projectiles.add(proj);
+        });
+
+        // Listen for standard loot drops from defeated enemies
+        this.events.on('spawn-loot', (data: { x: number, y: number }) => {
+            const item = this.physics.add.sprite(data.x, data.y - 20, 'item_dinar') as any;
+            item.lootData = { key: 'item_dinar', type: 'score', value: 100 };
+            this.groundItems.add(item);
+            
+            this.tweens.add({
+                targets: item,
+                y: data.y - 60,
+                duration: 300,
+                yoyo: true,
+                ease: 'Quad.easeOut'
+            });
+        });
+
+        // Listen for level completion!
+        this.events.on('boss-defeated', () => {
+            console.log("LEVEL 1 COMPLETE: The Architect of Inflation has fallen!");
+            // Here is where you will eventually call SaveManager to unlock Level 2
         });
 
         // ==========================================
@@ -177,7 +213,10 @@ export class MainLevel extends Phaser.Scene {
 
         // 4. Y-Depth Sorting for the Fake 3D Belt-Scroller Illusion
         this.children.each((child: any) => {
-            if (child.y && child.type !== 'Image') { 
+            // Give projectiles a slightly higher Z-index so you can see them fly over things
+            if (child instanceof Projectile) {
+                child.setDepth(child.y + 10);
+            } else if (child.y && child.type !== 'Image') { 
                 child.setDepth(child.y);
             }
         });
