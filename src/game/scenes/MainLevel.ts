@@ -2,11 +2,17 @@ import Phaser from 'phaser';
 import { Marko } from '../entities/Marko';
 import { Darko } from '../entities/Darko';
 import { Maja } from '../entities/Maja';
+
+// Enemies
 import { MUP } from '../entities/enemies/MUP';
+import { Dizel } from '../entities/enemies/Dizel';
+import { Dizelcic } from '../entities/enemies/Dizelcic';
+
+// Objects & Projectiles
 import { BreakableObject, LootData } from '../entities/BreakableObject';
 import { Projectile } from '../entities/Projectile';
 
-// Import our new decoupled Systems
+// Systems
 import { GoreManager } from '../systems/GoreManager';
 import { CollisionManager } from '../systems/CollisionManager';
 import { AudioManager } from '../systems/AudioManager';
@@ -53,10 +59,6 @@ export class MainLevel extends Phaser.Scene {
         this.audioManager = new AudioManager(this);
         this.inputService = new InputService(this);
 
-        // Example: If you have parsed CSV data in the registry from BootScene, load it here!
-        // const soundData = this.registry.get('soundCSV') || [];
-        // this.audioManager.loadSoundData(soundData);
-
         // ==========================================
         // 4. SPAWN THE CHOSEN CHARACTER
         // ==========================================
@@ -85,12 +87,21 @@ export class MainLevel extends Phaser.Scene {
         this.cameras.main.setZoom(1.1);
 
         // ==========================================
-        // 6. SPAWN LEVEL ENTITIES
+        // 6. SPAWN LEVEL ENTITIES (The 1993 Roster!)
         // ==========================================
+        
+        // Armored Riot Police
         const mup1 = new MUP(this, 1000, 700);
         const mup2 = new MUP(this, 1200, 800);
-        this.enemies.addMultiple([mup1, mup2]);
+        
+        // Fast Tracksuit Thugs
+        const dizel1 = new Dizel(this, 1400, 750);
+        const dizelcic1 = new Dizelcic(this, 1500, 680);
+        
+        // Register all enemies into the physics group
+        this.enemies.addMultiple([mup1, mup2, dizel1, dizelcic1]);
 
+        // Breakable Loot Kiosk
         const possibleLoot: LootData[] = [
             { key: 'item_dinar', type: 'score', value: 500 },
             { key: 'item_health', type: 'health', value: 25 }
@@ -117,14 +128,14 @@ export class MainLevel extends Phaser.Scene {
             this
         );
 
-        // Player vs Loot
+        // Player vs Loot (Picking up items)
         this.physics.add.overlap(
             this.player, 
             this.groundItems, 
             (player: any, item: any) => {
                 this.collectLoot(item);
             },
-            (player: any, item: any) => Math.abs(player.y - item.y) <= 30, // Don't pick up items in the background!
+            (player: any, item: any) => Math.abs(player.y - item.y) <= 30, // Don't pick up background items
             this
         );
 
@@ -139,6 +150,7 @@ export class MainLevel extends Phaser.Scene {
         // ==========================================
         // 9. INITIALIZE REACT HUD DATA
         // ==========================================
+        // Small delay ensures the React GameHUD component has mounted before we emit data to it
         this.time.delayedCall(100, () => {
             this.events.emit('update-health', this.player.health);
             this.events.emit('update-smf', this.player.smfMeter);
@@ -163,7 +175,7 @@ export class MainLevel extends Phaser.Scene {
             }
         });
 
-        // 4. Y-Depth Sorting for the Fake 3D Illusion
+        // 4. Y-Depth Sorting for the Fake 3D Belt-Scroller Illusion
         this.children.each((child: any) => {
             if (child.y && child.type !== 'Image') { 
                 child.setDepth(child.y);
@@ -178,9 +190,10 @@ export class MainLevel extends Phaser.Scene {
         if (!item.lootData) return;
         const data: LootData = item.lootData;
 
-        // Route the pickup sound through the global event bus to our AudioManager
+        // Route the pickup sound through the global event bus
         this.events.emit('play-generic-sfx', 'pickup_sound');
 
+        // Apply health or score depending on what dropped
         if (data.type === 'score') {
             this.events.emit('add-score', data.value);
         } else if (data.type === 'health') {
