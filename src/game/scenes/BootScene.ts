@@ -9,32 +9,54 @@ export class BootScene extends Phaser.Scene {
         // ==========================================
         // 1. LOAD ENVIRONMENT & UI ASSETS
         // ==========================================
-        // (Assuming you have placeholders for these right now)
+        // (Placeholders: Make sure these exist in public/assets/)
         this.load.image('part1_sky', 'assets/env/part1_sky.png');
-        this.load.image('obj_kiosk', 'assets/env/obj_kiosk.png');
-        this.load.image('muzzle_flash', 'assets/effects/muzzle-flash-m70.png');
+        this.load.image('kiosk', 'assets/env/obj_kiosk.png');
+        
+        // Items and Projectiles
+        this.load.image('item_dinar', 'assets/sprites/items/dinar.png');
+        this.load.image('item_health', 'assets/sprites/items/health.png');
+        this.load.image('item_pickaxe', 'assets/sprites/items/pickaxe.png');
         
         // ==========================================
-        // 2. THE 1993 ENEMY MEGA-ATLAS
+        // 2. LOAD AUDIO SPRITE (The tool we just ran!)
         // ==========================================
-        // Instead of loading 5 separate files, we load the single highly-optimized 1993 roster.
+        // Notice we only pass the MP3 now, skipping the OGG file
+        this.load.audioSprite('sfx_atlas', 'assets/audio/sfx_atlas.json', [
+            'assets/audio/sfx_atlas.mp3'
+        ]);
+
+        // ==========================================
+        // 3. LOAD TEXTURE ATLASES
+        // ==========================================
+        // The Player (Placeholder example)
+        // this.load.atlas('marko', 'assets/sprites/players/marko.png', 'assets/sprites/players/marko.json');
+
+        // The 1993 Enemy Mega-Atlas (MUP, Dizel, Dizelcic, Miner)
         this.load.atlas(
             'enemies_1993', 
             'assets/sprites/enemies/enemies_1993.png', 
             'assets/sprites/enemies/enemies_1993.json'
         );
 
-        // (You would still load the Player atlases separately since they are huge and used in all eras)
-        // this.load.atlas('marko', 'assets/sprites/players/marko.png', 'assets/sprites/players/marko.json');
+        // The 1993 Boss Atlas (Slobodan CEO)
+        this.load.atlas(
+            'boss_slobodan_93', 
+            'assets/sprites/bosses/slobodan_93.png', 
+            'assets/sprites/bosses/slobodan_93.json'
+        );
     }
 
     create() {
         // Automatically generate all 1993 enemy animations from the Mega-Atlas
         this.createEnemy1993Animations();
 
-        // (You would also generate Player animations here)
+        // Generate the boss animations
+        this.createBossAnimations();
 
-        // Once everything is loaded and parsed, boot the main game!
+        // (You would also generate Player animations here in the future)
+
+        // Once everything is loaded, parsed, and animations are created, boot the main game!
         this.scene.start('MainLevel');
     }
 
@@ -59,14 +81,10 @@ export class BootScene extends Phaser.Scene {
             {
                 character: 'Miner',
                 animations: ['miner-walk', 'miner-melee', 'miner-damage', 'miner-dying', 'miner-knockdown-get-up']
-            },
-            {
-                character: 'Slobodan (Boss)', 
-                animations: ['slobodan-walk', 'slobodan-run', 'slobodan-jump', 'slobodan-jump-punch', 'slobodan-punch-1', 'slobodan-punch-2', 'slobodan-damage', 'slobodan-special-attack', 'slobodan-dying', 'slobodan-knockdown-get-up']
             }
         ];
 
-        // Loop through the roster and generate the animations
+        // Loop through the roster and generate the animations from 'enemies_1993'
         enemyRoster.forEach(enemy => {
             enemy.animations.forEach(animName => {
                 
@@ -74,20 +92,45 @@ export class BootScene extends Phaser.Scene {
                 const isLooping = animName.includes('walk') || animName.includes('run') || animName.includes('idle');
                 
                 this.anims.create({
-                    key: animName, // The global key you will call (e.g., this.play('mup-walk'))
+                    key: animName, 
                     frames: this.anims.generateFrameNames('enemies_1993', {
-                        
-                        // IMPORTANT: TexturePacker usually formats frame names as "Folder/001.png" or "Folder_01".
-                        // Adjust this prefix to exactly match how your packer exports the JSON!
                         prefix: `${animName}/`, 
                         suffix: '.png',
                         start: 1,
-                        end: 8, // Adjust this default end frame if some animations are longer
-                        zeroPad: 3 // e.g., 001, 002, 003
+                        end: 8, // Adjust this if some animations have more/less than 8 frames
+                        zeroPad: 3 // Assumes your files are named 001.png, 002.png
                     }),
                     frameRate: 10, // 16-bit retro frame pacing
                     repeat: isLooping ? -1 : 0
                 });
+            });
+        });
+    }
+
+    /**
+     * Creates the animations specifically for the Level 1 Boss
+     */
+    private createBossAnimations() {
+        const bossAnimations = [
+            'slobodan-walk', 'slobodan-run', 'slobodan-jump', 'slobodan-jump-punch', 
+            'slobodan-punch-1', 'slobodan-punch-2', 'slobodan-damage', 
+            'slobodan-special-attack', 'slobodan-dying', 'slobodan-knockdown-get-up'
+        ];
+
+        bossAnimations.forEach(animName => {
+            const isLooping = animName.includes('walk') || animName.includes('run') || animName.includes('idle');
+            
+            this.anims.create({
+                key: animName, 
+                frames: this.anims.generateFrameNames('boss_slobodan_93', {
+                    prefix: `${animName}/`, 
+                    suffix: '.png',
+                    start: 1,
+                    end: 8, 
+                    zeroPad: 3 
+                }),
+                frameRate: 10,
+                repeat: isLooping ? -1 : 0
             });
         });
     }
